@@ -5,3 +5,4 @@ numpy==1.26.4
 pydantic==2.11.3
 requests
 scikit-learn
+yfinance
