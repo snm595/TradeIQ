@@ -16,7 +16,7 @@ import {
   BarChart3
 } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = `${import.meta.env.VITE_API_URL}/api`;
 
 export default function QuantLabsDashboard({ ticker = 'SPY', timeframe = '1d', period = '1y' }) {
   const [activeTab, setActiveTab] = useState('validation');
