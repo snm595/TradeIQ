@@ -1,0 +1,97 @@
+//@version=5
+indicator("Bollinger Band Scalping ", overlay=true, max_lines_count=500, max_labels_count=500)
+
+// Built from sunny's notes:
+//   - Setup: Bollinger Bands + EMA 8, 12, 26
+//   - When candle CLOSES outside BB (both sides of candle outside) -> enter
+//     long if below lower band, short if above upper band
+//   - TPs: 8 EMA (TP1), 12 EMA (TP2), 26 EMA (TP3) - 33% each
+//   - SL: 1%, 0.5%, or 0.2% (high vol -> 1%, normal -> 0.2-0.5%)
+//   - Best on 3-5 min TF with high volume
+//   - Avoid if candle wick is too big
+//   - Can offer 50-100 trades a day in volatile sessions
+
+// Inputs
+bbLen     = input.int(20,   "BB length")
+bbMult    = input.float(2.0,"BB std dev", step=0.1)
+ema1Len   = input.int(8,    "EMA 1 (TP1)")
+ema2Len   = input.int(12,   "EMA 2 (TP2)")
+ema3Len   = input.int(26,   "EMA 3 (TP3)")
+slPct     = input.float(0.5,"Stop loss %", step=0.1)
+maxWickPct= input.float(0.5,"Max wick % of body", step=0.1)
+useVolFilter = input.bool(true, "Require above-avg volume")
+volMult   = input.float(1.2,"Vol vs SMA20 x", step=0.1)
+useTrendFilter = input.bool(false, "Only trade with HTF trend (200 EMA)")
+showEMAs  = input.bool(true,"Show EMAs")
+showBB    = input.bool(true,"Show Bollinger Bands")
+
+// Calcs
+bbBasis = ta.sma(close, bbLen)
+bbDev   = bbMult * ta.stdev(close, bbLen)
+bbUpper = bbBasis + bbDev
+bbLower = bbBasis - bbDev
+
+ema1 = ta.ema(close, ema1Len)
+ema2 = ta.ema(close, ema2Len)
+ema3 = ta.ema(close, ema3Len)
+ema200 = ta.ema(close, 200)
+
+volSMA = ta.sma(volume, 20)
+volOK  = useVolFilter ? volume > volSMA * volMult : true
+
+bodyAbs = math.abs(close - open)
+upperWick = high - math.max(close, open)
+lowerWick = math.min(close, open) - low
+wickOk = bodyAbs > 0 ? (upperWick + lowerWick) / bodyAbs <= maxWickPct + 1.0 : false
+
+trendUp   = useTrendFilter ? close > ema200 : true
+trendDown = useTrendFilter ? close < ema200 : true
+
+// Signal: full candle below lower band (both open and close below) for long;
+// full candle above upper band for short.
+sigLong  = open < bbLower and close < bbLower and volOK and wickOk and trendUp
+sigShort = open > bbUpper and close > bbUpper and volOK and wickOk and trendDown
+
+// Plot
+plot(showBB ? bbUpper : na, "BB Upper", color=color.gray, style=plot.style_linebr)
+plot(showBB ? bbBasis : na, "BB Basis", color=color.gray, style=plot.style_linebr)
+plot(showBB ? bbLower : na, "BB Lower", color=color.gray, style=plot.style_linebr)
+plot(showEMAs ? ema1 : na, "EMA 8",  color=color.aqua,    linewidth=1)
+plot(showEMAs ? ema2 : na, "EMA 12", color=color.yellow,  linewidth=1)
+plot(showEMAs ? ema3 : na, "EMA 26", color=color.fuchsia, linewidth=2)
+plot(useTrendFilter ? ema200 : na, "EMA 200", color=color.orange, linewidth=2)
+
+plotshape(sigLong,  "Long",  shape.labelup,   location.belowbar, color=color.green, size=size.normal, text="CCSS L", textcolor=color.white)
+plotshape(sigShort, "Short", shape.labeldown, location.abovebar, color=color.red,   size=size.normal, text="CCSS S", textcolor=color.white)
+
+// Draw entry / SL / TPs on signal
+if sigLong
+    e = close
+    sl = e * (1 - slPct / 100.0)
+    line.new(bar_index, e,    bar_index + 20, e,    color=color.green, width=2)
+    line.new(bar_index, sl,   bar_index + 20, sl,   color=color.red,   style=line.style_dashed)
+    line.new(bar_index, ema1, bar_index + 20, ema1, color=color.aqua,    style=line.style_dashed)
+    line.new(bar_index, ema2, bar_index + 20, ema2, color=color.yellow,  style=line.style_dashed)
+    line.new(bar_index, ema3, bar_index + 20, ema3, color=color.fuchsia, style=line.style_dashed)
+    label.new(bar_index + 20, e,    "Entry",  style=label.style_label_left, color=color.new(color.green, 30), textcolor=color.white, size=size.tiny)
+    label.new(bar_index + 20, sl,   "SL",     style=label.style_label_left, color=color.new(color.red, 30),   textcolor=color.white, size=size.tiny)
+    label.new(bar_index + 20, ema1, "TP1 8",  style=label.style_label_left, color=color.new(color.aqua, 30),    textcolor=color.white, size=size.tiny)
+    label.new(bar_index + 20, ema2, "TP2 12", style=label.style_label_left, color=color.new(color.yellow, 30),  textcolor=color.white, size=size.tiny)
+    label.new(bar_index + 20, ema3, "TP3 26", style=label.style_label_left, color=color.new(color.fuchsia, 30), textcolor=color.white, size=size.tiny)
+
+if sigShort
+    e = close
+    sl = e * (1 + slPct / 100.0)
+    line.new(bar_index, e,    bar_index + 20, e,    color=color.red, width=2)
+    line.new(bar_index, sl,   bar_index + 20, sl,   color=color.red, style=line.style_dashed)
+    line.new(bar_index, ema1, bar_index + 20, ema1, color=color.aqua,    style=line.style_dashed)
+    line.new(bar_index, ema2, bar_index + 20, ema2, color=color.yellow,  style=line.style_dashed)
+    line.new(bar_index, ema3, bar_index + 20, ema3, color=color.fuchsia, style=line.style_dashed)
+    label.new(bar_index + 20, e,    "Entry",  style=label.style_label_left, color=color.new(color.red, 30), textcolor=color.white, size=size.tiny)
+    label.new(bar_index + 20, sl,   "SL",     style=label.style_label_left, color=color.new(color.red, 30), textcolor=color.white, size=size.tiny)
+    label.new(bar_index + 20, ema1, "TP1 8",  style=label.style_label_left, color=color.new(color.aqua, 30),    textcolor=color.white, size=size.tiny)
+    label.new(bar_index + 20, ema2, "TP2 12", style=label.style_label_left, color=color.new(color.yellow, 30),  textcolor=color.white, size=size.tiny)
+    label.new(bar_index + 20, ema3, "TP3 26", style=label.style_label_left, color=color.new(color.fuchsia, 30), textcolor=color.white, size=size.tiny)
+
+alertcondition(sigLong,  "CCSS Long",  "CCSS scalp long")
+alertcondition(sigShort, "CCSS Short", "CCSS scalp short")

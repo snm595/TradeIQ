@@ -1,0 +1,92 @@
+{
+  "baseline": {
+    "runs": 40,
+    "trades": 43,
+    "pnl_sum": 6.24,
+    "avg_win_rate": 32.015,
+    "avg_sharpe": 0.0105,
+    "avg_dd": 0.576,
+    "sideways_trades": 0,
+    "avg_signals": 1.175
+  },
+  "remove_directional_efficiency": {
+    "runs": 40,
+    "trades": 45,
+    "pnl_sum": 8.879999999999999,
+    "avg_win_rate": 35.515,
+    "avg_sharpe": 5.28775,
+    "avg_dd": 0.5535,
+    "sideways_trades": 0,
+    "avg_signals": 1.275
+  },
+  "remove_overlap_density": {
+    "runs": 40,
+    "trades": 67,
+    "pnl_sum": 2.95,
+    "avg_win_rate": 36.660000000000004,
+    "avg_sharpe": 1.7172500000000004,
+    "avg_dd": 0.844,
+    "sideways_trades": 0,
+    "avg_signals": 1.85
+  },
+  "remove_follow_through": {
+    "runs": 40,
+    "trades": 42,
+    "pnl_sum": 7.4399999999999995,
+    "avg_win_rate": 33.019999999999996,
+    "avg_sharpe": 0.01025,
+    "avg_dd": 0.5469999999999999,
+    "sideways_trades": 0,
+    "avg_signals": 1.325
+  },
+  "remove_vwap_flatness": {
+    "runs": 40,
+    "trades": 43,
+    "pnl_sum": 6.01,
+    "avg_win_rate": 31.764999999999997,
+    "avg_sharpe": 0.005750000000000001,
+    "avg_dd": 0.58175,
+    "sideways_trades": 0,
+    "avg_signals": 1.175
+  },
+  "remove_ema_slope_floor": {
+    "runs": 40,
+    "trades": 43,
+    "pnl_sum": 6.24,
+    "avg_win_rate": 32.015,
+    "avg_sharpe": 0.0105,
+    "avg_dd": 0.576,
+    "sideways_trades": 0,
+    "avg_signals": 1.175
+  },
+  "remove_trend_stability": {
+    "runs": 40,
+    "trades": 47,
+    "pnl_sum": 1.7000000000000002,
+    "avg_win_rate": 30.2075,
+    "avg_sharpe": 0.0025,
+    "avg_dd": 0.60275,
+    "sideways_trades": 0,
+    "avg_signals": 1.3
+  },
+  "remove_failed_breakout_veto": {
+    "runs": 40,
+    "trades": 106,
+    "pnl_sum": -9.980000000000002,
+    "avg_win_rate": 35.260000000000005,
+    "avg_sharpe": -3.1457499999999996,
+    "avg_dd": 1.418,
+    "sideways_trades": 0,
+    "avg_signals": 3.025
+  },
+  "remove_chop_score_veto": {
+    "runs": 40,
+    "trades": 46,
+    "pnl_sum": 6.75,
+    "avg_win_rate": 34.515,
+    "avg_sharpe": 0.006750000000000001,
+    "avg_dd": 0.607,
+    "sideways_trades": 0,
+    "avg_signals": 1.175
+  }
+}

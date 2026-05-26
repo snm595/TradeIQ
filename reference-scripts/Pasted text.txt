@@ -1,0 +1,392 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © ElarisGroup
+
+//@version=6
+indicator("Elaris Liquidity Zones Pro", shorttitle="Elaris LZ Pro", overlay=true, max_boxes_count=500, max_lines_count=500, max_labels_count=500)
+
+//====================================================
+// Inputs
+//====================================================
+groupGeneral = "General"
+swingLen           = input.int(6, "Swing Length", minval=2, group=groupGeneral)
+maxZones           = input.int(20, "Max Active Zones", minval=5, maxval=100, group=groupGeneral)
+zoneAtrMult        = input.float(0.20, "Zone ATR Padding", minval=0.01, step=0.01, group=groupGeneral)
+atrLen             = input.int(14, "ATR Length", minval=1, group=groupGeneral)
+extendBars         = input.int(150, "Zone Extend Bars", minval=10, maxval=1000, group=groupGeneral)
+showMidline        = input.bool(true, "Show Zone Midline", group=groupGeneral)
+showLabels         = input.bool(true, "Show Labels", group=groupGeneral)
+showSweeps         = input.bool(true, "Show Sweep Markers", group=groupGeneral)
+
+groupEQ = "Equal High / Low Logic"
+enableEQ           = input.bool(true, "Detect Equal Highs / Lows", group=groupEQ)
+eqLookback         = input.int(40, "EQ Search Lookback", minval=5, maxval=300, group=groupEQ)
+eqToleranceAtr     = input.float(0.10, "EQ Tolerance ATR", minval=0.01, step=0.01, group=groupEQ)
+
+groupFilters = "Quality Filters"
+useVolumeFilter    = input.bool(false, "Use Volume Filter", group=groupFilters)
+volLen             = input.int(20, "Volume SMA Length", minval=1, group=groupFilters)
+minStrengthToShow  = input.float(0.0, "Minimum Strength To Show", minval=0.0, maxval=10.0, step=0.1, group=groupFilters)
+
+groupStyle = "Style"
+sellZoneColor      = input.color(color.new(color.red, 82), "Sell-side Zone", group=groupStyle)
+buyZoneColor       = input.color(color.new(color.lime, 82), "Buy-side Zone", group=groupStyle)
+sweptSellColor     = input.color(color.new(color.orange, 78), "Swept Sell-side Zone", group=groupStyle)
+sweptBuyColor      = input.color(color.new(color.aqua, 78), "Swept Buy-side Zone", group=groupStyle)
+invalidColor       = input.color(color.new(color.gray, 85), "Invalidated Zone", group=groupStyle)
+midlineSellColor   = input.color(color.new(color.red, 0), "Sell Midline", group=groupStyle)
+midlineBuyColor    = input.color(color.new(color.lime, 0), "Buy Midline", group=groupStyle)
+
+groupAlerts = "Alerts"
+enableTouchAlerts  = input.bool(true, "Enable Zone Touch Alerts", group=groupAlerts)
+enableSweepAlerts  = input.bool(true, "Enable Sweep Alerts", group=groupAlerts)
+enableBreakAlerts  = input.bool(true, "Enable Invalidation Alerts", group=groupAlerts)
+
+//====================================================
+// Constants / Enums
+//====================================================
+var int SIDE_SELL = 1
+var int SIDE_BUY  = -1
+
+var int STATE_FRESH      = 0
+var int STATE_TESTED     = 1
+var int STATE_SWEPT      = 2
+var int STATE_INVALID    = 3
+
+//====================================================
+// Storage
+//====================================================
+var zoneTopArr        = array.new_float()
+var zoneBotArr        = array.new_float()
+var zoneMidArr        = array.new_float()
+var zoneSideArr       = array.new_int()
+var zoneStateArr      = array.new_int()
+var zoneStrengthArr   = array.new_float()
+var zoneCreatedArr    = array.new_int()
+var zoneTouchesArr    = array.new_int()
+var zoneSweptArr      = array.new_bool()
+
+var zoneBoxArr        = array.new_box()
+var zoneLineArr       = array.new_line()
+var zoneLabelArr      = array.new_label()
+
+//====================================================
+// Helpers
+//====================================================
+atr = ta.atr(atrLen)
+volSma = ta.sma(volume, volLen)
+
+f_zoneStateText(_state) =>
+    _state == STATE_FRESH ? "Fresh" :
+     _state == STATE_TESTED ? "Tested" :
+     _state == STATE_SWEPT ? "Swept" : "Invalid"
+
+f_zoneBaseColor(_side, _state) =>
+    if _state == STATE_INVALID
+        invalidColor
+    else if _state == STATE_SWEPT
+        _side == SIDE_SELL ? sweptSellColor : sweptBuyColor
+    else
+        _side == SIDE_SELL ? sellZoneColor : buyZoneColor
+
+f_midColor(_side) =>
+    _side == SIDE_SELL ? midlineSellColor : midlineBuyColor
+
+f_calcStrength(_pivotPrice, _side, _pivotBarOffset) =>
+    float score = 0.0
+    
+    // Pivot prominence
+    float distFromClose = math.abs(close - _pivotPrice) / math.max(atr, syminfo.mintick)
+    score += math.min(distFromClose, 3.0) * 0.8
+
+    // Volume confirmation
+    if useVolumeFilter
+        float volBoost = volSma > 0 ? volume[_pivotBarOffset] / volSma[_pivotBarOffset] : 1.0
+        score += math.min(volBoost, 2.5)
+
+    // Freshness proxy
+    score += 1.0
+
+    // Bias by side-specific rejection
+    if _side == SIDE_SELL
+        score += ((high[_pivotBarOffset] - close[_pivotBarOffset]) / math.max(atr, syminfo.mintick)) * 0.5
+    else
+        score += ((close[_pivotBarOffset] - low[_pivotBarOffset]) / math.max(atr, syminfo.mintick)) * 0.5
+
+    math.max(score, 0.1)
+
+f_deleteZone(_idx) =>
+    bx = array.get(zoneBoxArr, _idx)
+    ln = array.get(zoneLineArr, _idx)
+    lb = array.get(zoneLabelArr, _idx)
+
+    if not na(bx)
+        box.delete(bx)
+    if not na(ln)
+        line.delete(ln)
+    if not na(lb)
+        label.delete(lb)
+
+f_trimOldestIfNeeded() =>
+    while array.size(zoneTopArr) > maxZones
+        f_deleteZone(0)
+
+        array.remove(zoneTopArr, 0)
+        array.remove(zoneBotArr, 0)
+        array.remove(zoneMidArr, 0)
+        array.remove(zoneSideArr, 0)
+        array.remove(zoneStateArr, 0)
+        array.remove(zoneStrengthArr, 0)
+        array.remove(zoneCreatedArr, 0)
+        array.remove(zoneTouchesArr, 0)
+        array.remove(zoneSweptArr, 0)
+        array.remove(zoneBoxArr, 0)
+        array.remove(zoneLineArr, 0)
+        array.remove(zoneLabelArr, 0)
+
+f_makeLabelText(_side, _state, _strength, _touches) =>
+    sideTxt = _side == SIDE_SELL ? "Sell-side LQ" : "Buy-side LQ"
+    sideTxt + "\n" + f_zoneStateText(_state) + " | S:" + str.tostring(_strength, "#.0") + " | T:" + str.tostring(_touches)
+
+f_addZone(_top, _bot, _side, _strength) =>
+    float mid = (_top + _bot) * 0.5
+
+    if _strength < minStrengthToShow
+        na
+    else
+        bx = box.new(left=bar_index, top=_top, right=bar_index + extendBars, bottom=_bot, bgcolor=f_zoneBaseColor(_side, STATE_FRESH), border_color=color.new(color.white, 80))
+        ln = showMidline ? line.new(x1=bar_index, y1=mid, x2=bar_index + extendBars, y2=mid, color=f_midColor(_side), style=line.style_dashed, width=1) : na
+        lb = showLabels ? label.new(bar_index, _side == SIDE_SELL ? _top : _bot, f_makeLabelText(_side, STATE_FRESH, _strength, 0), style=label.style_label_left, textcolor=color.white, color=color.new(color.black, 0), size=size.tiny) : na
+
+        array.push(zoneTopArr, _top)
+        array.push(zoneBotArr, _bot)
+        array.push(zoneMidArr, mid)
+        array.push(zoneSideArr, _side)
+        array.push(zoneStateArr, STATE_FRESH)
+        array.push(zoneStrengthArr, _strength)
+        array.push(zoneCreatedArr, bar_index)
+        array.push(zoneTouchesArr, 0)
+        array.push(zoneSweptArr, false)
+
+        array.push(zoneBoxArr, bx)
+        array.push(zoneLineArr, ln)
+        array.push(zoneLabelArr, lb)
+
+        f_trimOldestIfNeeded()
+
+f_updateZoneVisual(_idx) =>
+    top      = array.get(zoneTopArr, _idx)
+    bot      = array.get(zoneBotArr, _idx)
+    mid      = array.get(zoneMidArr, _idx)
+    side     = array.get(zoneSideArr, _idx)
+    state    = array.get(zoneStateArr, _idx)
+    strength = array.get(zoneStrengthArr, _idx)
+    touches  = array.get(zoneTouchesArr, _idx)
+    bx       = array.get(zoneBoxArr, _idx)
+    ln       = array.get(zoneLineArr, _idx)
+    lb       = array.get(zoneLabelArr, _idx)
+    bornBar  = array.get(zoneCreatedArr, _idx)
+
+    r = math.min(bar_index + extendBars, bornBar + extendBars)
+
+    if not na(bx)
+        box.set_left(bx, bornBar)
+        box.set_right(bx, r)
+        box.set_top(bx, top)
+        box.set_bottom(bx, bot)
+        box.set_bgcolor(bx, f_zoneBaseColor(side, state))
+
+    if not na(ln)
+        line.set_x1(ln, bornBar)
+        line.set_x2(ln, r)
+        line.set_y1(ln, mid)
+        line.set_y2(ln, mid)
+        line.set_color(ln, f_midColor(side))
+
+    if not na(lb)
+        label.set_x(lb, bornBar)
+        label.set_y(lb, side == SIDE_SELL ? top : bot)
+        label.set_text(lb, f_makeLabelText(side, state, strength, touches))
+
+f_markTouch(_idx) =>
+    touches = array.get(zoneTouchesArr, _idx)
+    state   = array.get(zoneStateArr, _idx)
+
+    array.set(zoneTouchesArr, _idx, touches + 1)
+    if state == STATE_FRESH
+        array.set(zoneStateArr, _idx, STATE_TESTED)
+
+f_markSwept(_idx) =>
+    array.set(zoneStateArr, _idx, STATE_SWEPT)
+    array.set(zoneSweptArr, _idx, true)
+
+f_markInvalid(_idx) =>
+    array.set(zoneStateArr, _idx, STATE_INVALID)
+
+f_overlaps(_top1, _bot1, _top2, _bot2) =>
+    math.max(_bot1, _bot2) <= math.min(_top1, _top2)
+
+f_hasSimilarZone(_top, _bot, _side) =>
+    bool found = false
+    int zoneCount = array.size(zoneTopArr)
+
+    if zoneCount > 0
+        for i = 0 to zoneCount - 1
+            int side_i  = array.get(zoneSideArr, i)
+            int state_i = array.get(zoneStateArr, i)
+
+            if side_i == _side and state_i != STATE_INVALID
+                float zTop = array.get(zoneTopArr, i)
+                float zBot = array.get(zoneBotArr, i)
+                float zMid = array.get(zoneMidArr, i)
+                float newMid = (_top + _bot) * 0.5
+
+                if f_overlaps(_top, _bot, zTop, zBot) or math.abs(newMid - zMid) <= atr * 0.20
+                    found := true
+                    break
+
+    found
+f_detectEqualHigh() =>
+    bool found = false
+    float level = na
+
+    if enableEQ and bar_index > eqLookback
+        ref = high[swingLen]
+        tol = atr[swingLen] * eqToleranceAtr
+        int hits = 0
+        for i = swingLen + 1 to math.min(eqLookback, bar_index - 1)
+            if math.abs(high[i] - ref) <= tol
+                hits += 1
+        if hits >= 1
+            found := true
+            level := ref
+
+    [found, level]
+
+f_detectEqualLow() =>
+    bool found = false
+    float level = na
+
+    if enableEQ and bar_index > eqLookback
+        ref = low[swingLen]
+        tol = atr[swingLen] * eqToleranceAtr
+        int hits = 0
+        for i = swingLen + 1 to math.min(eqLookback, bar_index - 1)
+            if math.abs(low[i] - ref) <= tol
+                hits += 1
+        if hits >= 1
+            found := true
+            level := ref
+
+    [found, level]
+
+//====================================================
+// Pivot detection
+//====================================================
+ph = ta.pivothigh(high, swingLen, swingLen)
+pl = ta.pivotlow(low, swingLen, swingLen)
+
+if not na(ph)
+    pivotPrice = ph
+    pad = atr[swingLen] * zoneAtrMult
+    top = pivotPrice + pad
+    bot = pivotPrice - pad
+    strength = f_calcStrength(pivotPrice, SIDE_SELL, swingLen)
+
+    [eqhFound, eqhLevel] = f_detectEqualHigh()
+    if eqhFound
+        top := math.max(top, eqhLevel + pad)
+        bot := math.min(bot, eqhLevel - pad)
+        strength += 1.0
+
+    if not f_hasSimilarZone(top, bot, SIDE_SELL)
+        f_addZone(top, bot, SIDE_SELL, strength)
+
+if not na(pl)
+    pivotPrice = pl
+    pad = atr[swingLen] * zoneAtrMult
+    top = pivotPrice + pad
+    bot = pivotPrice - pad
+    strength = f_calcStrength(pivotPrice, SIDE_BUY, swingLen)
+
+    [eqlFound, eqlLevel] = f_detectEqualLow()
+    if eqlFound
+        top := math.max(top, eqlLevel + pad)
+        bot := math.min(bot, eqlLevel - pad)
+        strength += 1.0
+
+    if not f_hasSimilarZone(top, bot, SIDE_BUY)
+        f_addZone(top, bot, SIDE_BUY, strength)
+
+//====================================================
+// Zone state machine
+//====================================================
+bool anyTouchBull = false
+bool anyTouchBear = false
+bool anySweepBull = false
+bool anySweepBear = false
+bool anyBreakBull = false
+bool anyBreakBear = false
+
+int zoneCount = array.size(zoneTopArr)
+
+if zoneCount > 0
+    for i = 0 to zoneCount - 1
+        top   = array.get(zoneTopArr, i)
+        bot   = array.get(zoneBotArr, i)
+        mid   = array.get(zoneMidArr, i)
+        side  = array.get(zoneSideArr, i)
+        state = array.get(zoneStateArr, i)
+
+        isActive = state != STATE_INVALID
+        intersects = high >= bot and low <= top
+
+        if isActive and intersects
+            f_markTouch(i)
+            if side == SIDE_SELL
+                anyTouchBear := true
+            else
+                anyTouchBull := true
+
+        // Sweep logic
+        sellSweep = side == SIDE_SELL and state != STATE_INVALID and high > top and close < top
+        buySweep  = side == SIDE_BUY  and state != STATE_INVALID and low < bot and close > bot
+
+        if sellSweep
+            f_markSwept(i)
+            if showSweeps
+                label.new(bar_index, high, "Sell-side Sweep", style=label.style_label_down, color=color.new(color.orange, 0), textcolor=color.white, size=size.tiny)
+            anySweepBear := true
+
+        if buySweep
+            f_markSwept(i)
+            if showSweeps
+                label.new(bar_index, low, "Buy-side Sweep", style=label.style_label_up, color=color.new(color.aqua, 0), textcolor=color.black, size=size.tiny)
+            anySweepBull := true
+
+        // Invalidation logic
+        sellInvalid = side == SIDE_SELL and close > top
+        buyInvalid  = side == SIDE_BUY and close < bot
+
+        if sellInvalid
+            f_markInvalid(i)
+            anyBreakBear := true
+
+        if buyInvalid
+            f_markInvalid(i)
+            anyBreakBull := true
+
+        age = bar_index - array.get(zoneCreatedArr, i)
+        oldStrength = array.get(zoneStrengthArr, i)
+        decayedStrength = math.max(oldStrength - (age > 0 and age % 100 == 0 ? 0.1 : 0.0), 0.0)
+        array.set(zoneStrengthArr, i, decayedStrength)
+
+        f_updateZoneVisual(i)
+//====================================================
+// Alerts
+//====================================================
+alertcondition(enableTouchAlerts and anyTouchBear, "Sell-side Liquidity Touched", "Elaris LZ Pro: Sell-side liquidity zone touched.")
+alertcondition(enableTouchAlerts and anyTouchBull, "Buy-side Liquidity Touched", "Elaris LZ Pro: Buy-side liquidity zone touched.")
+alertcondition(enableSweepAlerts and anySweepBear, "Sell-side Sweep Detected", "Elaris LZ Pro: Sell-side liquidity sweep detected.")
+alertcondition(enableSweepAlerts and anySweepBull, "Buy-side Sweep Detected", "Elaris LZ Pro: Buy-side liquidity sweep detected.")
+alertcondition(enableBreakAlerts and anyBreakBear, "Sell-side Zone Invalidated", "Elaris LZ Pro: Sell-side liquidity zone invalidated.")
+alertcondition(enableBreakAlerts and anyBreakBull, "Buy-side Zone Invalidated", "Elaris LZ Pro: Buy-side liquidity zone invalidated.")

@@ -1,0 +1,58 @@
+{
+  "summary": {
+    "runs": 32,
+    "avg_win_rate_full": 32.84375,
+    "median_profit_factor_full": 0.95,
+    "avg_sharpe_full": -0.2915625,
+    "avg_max_drawdown_r_full": 4.480625,
+    "avg_signal_rate_pct_full": 1.9937374450116088,
+    "avg_confidence_pnl_corr_full": 0.01770897625728326,
+    "oos_avg_win_rate": 31.987499999999997,
+    "oos_avg_total_pnl_r": -0.03249999999999997,
+    "avg_win_rate_drop_in_to_oos": -2.4875000000000003,
+    "avg_pnl_drop_in_to_oos": -0.6834375000000001,
+    "avg_sharpe_drop_in_to_oos": -0.10687500000000004
+  },
+  "failures": [
+    {
+      "asset": "SPY",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for SPY (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/SPY?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "QQQ",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for QQQ (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/QQQ?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/QQQ?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "AAPL",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for AAPL (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/AAPL?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "TSLA",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for TSLA (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/TSLA?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/TSLA?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "BTC-USD",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for BTC-USD (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "ETH-USD",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for ETH-USD (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/ETH-USD?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/ETH-USD?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "EURUSD",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for EURUSD=X (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/EURUSD=X?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/EURUSD=X?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "NVDA",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for NVDA (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/NVDA?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/NVDA?interval=4h&range=5y&includePrePost=false"
+    }
+  ]
+}

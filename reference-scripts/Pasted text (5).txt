@@ -1,0 +1,904 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// Multi-Timeframe MA Structure & RSI Confluence v1.2
+// Using references by BalintDavid, thx!
+// © faint/idea (2026)
+// 
+//@version=6
+indicator(
+     title = "MTF MAs & RSI Confluence",
+     overlay = true,
+     max_bars_back = 1000,
+     max_labels_count = 500,
+     max_lines_count = 500
+)
+
+//──────────────────────────────────────────────────────────────────────────────
+// Inputs: Global visibility
+//──────────────────────────────────────────────────────────────────────────────
+groupGlobal = "Global Display"
+
+showEMA50  = input.bool(true,  "Show EMA 50",  group = groupGlobal)
+showEMA200 = input.bool(true,  "Show EMA 200", group = groupGlobal)
+showSMA50  = input.bool(false, "Show SMA 50",  group = groupGlobal)
+showSMA200 = input.bool(false, "Show SMA 200", group = groupGlobal)
+
+lineWidth50  = input.int(1, "Line Width 50",  minval = 1, maxval = 4, group = groupGlobal)
+lineWidth200 = input.int(2, "Line Width 200", minval = 1, maxval = 4, group = groupGlobal)
+
+hideLowerTFs = input.bool(true, "Hide lower-TF MAs on higher chart TFs", group = groupGlobal, tooltip = "When enabled, lower timeframe moving averages are hidden on higher timeframe charts. Example: 1h MAs are hidden on a 4h chart.")
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Inputs: Timeframe visibility
+//──────────────────────────────────────────────────────────────────────────────
+groupTF = "Timeframes"
+
+show15m = input.bool(false, "Show 15m MAs",    group = groupTF)
+show1h  = input.bool(true,  "Show 1h MAs",     group = groupTF)
+show4h  = input.bool(true,  "Show 4h MAs",     group = groupTF)
+show1D  = input.bool(true,  "Show Daily MAs",  group = groupTF)
+show1W  = input.bool(true,  "Show Weekly MAs", group = groupTF)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Inputs: Colors
+//──────────────────────────────────────────────────────────────────────────────
+groupColors = "MA Colors"
+
+color15m = input.color(color.rgb(0, 188, 212),  "15m Color",    group = groupColors)   // #00BCD4
+color1h  = input.color(color.rgb(8, 153, 129),  "1h Color",     group = groupColors)   // #089981
+color4h  = input.color(color.rgb(76, 175, 80),  "4h Color",     group = groupColors)   // #4CAF50
+color1D  = input.color(color.rgb(255, 235, 59), "Daily Color",  group = groupColors)   // #FFEB3B
+color1W  = input.color(color.rgb(255, 152, 0),  "Weekly Color", group = groupColors)   // #FF9800
+
+emaTransparency = input.int(0,  "EMA Transparency", minval = 0, maxval = 100, group = groupColors)
+smaTransparency = input.int(15, "SMA Transparency", minval = 0, maxval = 100, group = groupColors)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Helper function: Returns EMA 50, EMA 200, SMA 50, SMA 200
+//──────────────────────────────────────────────────────────────────────────────
+f_getMAs() =>
+    ema50  = ta.ema(close, 50)
+    ema200 = ta.ema(close, 200)
+    sma50  = ta.sma(close, 50)
+    sma200 = ta.sma(close, 200)
+    [ema50, ema200, sma50, sma200]
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Multi-Timeframe Requests
+// gaps_on avoids stepped/staircase visuals on higher timeframe MAs.
+//──────────────────────────────────────────────────────────────────────────────
+[ema50_15m, ema200_15m, sma50_15m, sma200_15m] = request.security(syminfo.tickerid, "15",  f_getMAs(), gaps = barmerge.gaps_on)
+[ema50_1h,  ema200_1h,  sma50_1h,  sma200_1h]  = request.security(syminfo.tickerid, "60",  f_getMAs(), gaps = barmerge.gaps_on)
+[ema50_4h,  ema200_4h,  sma50_4h,  sma200_4h]  = request.security(syminfo.tickerid, "240", f_getMAs(), gaps = barmerge.gaps_on)
+[ema50_1D,  ema200_1D,  sma50_1D,  sma200_1D]  = request.security(syminfo.tickerid, "D",   f_getMAs(), gaps = barmerge.gaps_on)
+[ema50_1W,  ema200_1W,  sma50_1W,  sma200_1W]  = request.security(syminfo.tickerid, "W",   f_getMAs(), gaps = barmerge.gaps_on)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Timeframe filter logic
+// Only show MAs from equal or higher timeframes when the option is enabled.
+//──────────────────────────────────────────────────────────────────────────────
+chartTFSeconds = timeframe.in_seconds()
+
+tf15mSeconds = timeframe.in_seconds("15")
+tf1hSeconds  = timeframe.in_seconds("60")
+tf4hSeconds  = timeframe.in_seconds("240")
+tf1DSeconds  = timeframe.in_seconds("D")
+tf1WSeconds  = timeframe.in_seconds("W")
+
+allow15m = not hideLowerTFs or chartTFSeconds <= tf15mSeconds
+allow1h  = not hideLowerTFs or chartTFSeconds <= tf1hSeconds
+allow4h  = not hideLowerTFs or chartTFSeconds <= tf4hSeconds
+allow1D  = not hideLowerTFs or chartTFSeconds <= tf1DSeconds
+allow1W  = not hideLowerTFs or chartTFSeconds <= tf1WSeconds
+
+display15m = show15m and allow15m
+display1h  = show1h  and allow1h
+display4h  = show4h  and allow4h
+display1D  = show1D  and allow1D
+display1W  = show1W  and allow1W
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Colors
+//──────────────────────────────────────────────────────────────────────────────
+emaColor15m = color.new(color15m, emaTransparency)
+emaColor1h  = color.new(color1h,  emaTransparency)
+emaColor4h  = color.new(color4h,  emaTransparency)
+emaColor1D  = color.new(color1D,  emaTransparency)
+emaColor1W  = color.new(color1W,  emaTransparency)
+
+smaColor15m = color.new(color15m, smaTransparency)
+smaColor1h  = color.new(color1h,  smaTransparency)
+smaColor4h  = color.new(color4h,  smaTransparency)
+smaColor1D  = color.new(color1D,  smaTransparency)
+smaColor1W  = color.new(color1W,  smaTransparency)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Plots: 15m
+// EMA = solid, SMA = dashed
+//──────────────────────────────────────────────────────────────────────────────
+plot(display15m and showEMA50  ? ema50_15m  : na, title = "15m EMA 50",  color = emaColor15m, linewidth = lineWidth50,  linestyle = plot.linestyle_solid)
+plot(display15m and showEMA200 ? ema200_15m : na, title = "15m EMA 200", color = emaColor15m, linewidth = lineWidth200, linestyle = plot.linestyle_solid)
+plot(display15m and showSMA50  ? sma50_15m  : na, title = "15m SMA 50",  color = smaColor15m, linewidth = lineWidth50,  linestyle = plot.linestyle_dashed)
+plot(display15m and showSMA200 ? sma200_15m : na, title = "15m SMA 200", color = smaColor15m, linewidth = lineWidth200, linestyle = plot.linestyle_dashed)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Plots: 1h
+//──────────────────────────────────────────────────────────────────────────────
+plot(display1h and showEMA50  ? ema50_1h  : na, title = "1h EMA 50",  color = emaColor1h, linewidth = lineWidth50,  linestyle = plot.linestyle_solid)
+plot(display1h and showEMA200 ? ema200_1h : na, title = "1h EMA 200", color = emaColor1h, linewidth = lineWidth200, linestyle = plot.linestyle_solid)
+plot(display1h and showSMA50  ? sma50_1h  : na, title = "1h SMA 50",  color = smaColor1h, linewidth = lineWidth50,  linestyle = plot.linestyle_dashed)
+plot(display1h and showSMA200 ? sma200_1h : na, title = "1h SMA 200", color = smaColor1h, linewidth = lineWidth200, linestyle = plot.linestyle_dashed)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Plots: 4h
+//──────────────────────────────────────────────────────────────────────────────
+plot(display4h and showEMA50  ? ema50_4h  : na, title = "4h EMA 50",  color = emaColor4h, linewidth = lineWidth50,  linestyle = plot.linestyle_solid)
+plot(display4h and showEMA200 ? ema200_4h : na, title = "4h EMA 200", color = emaColor4h, linewidth = lineWidth200, linestyle = plot.linestyle_solid)
+plot(display4h and showSMA50  ? sma50_4h  : na, title = "4h SMA 50",  color = smaColor4h, linewidth = lineWidth50,  linestyle = plot.linestyle_dashed)
+plot(display4h and showSMA200 ? sma200_4h : na, title = "4h SMA 200", color = smaColor4h, linewidth = lineWidth200, linestyle = plot.linestyle_dashed)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Plots: Daily
+//──────────────────────────────────────────────────────────────────────────────
+plot(display1D and showEMA50  ? ema50_1D  : na, title = "1D EMA 50",  color = emaColor1D, linewidth = lineWidth50,  linestyle = plot.linestyle_solid)
+plot(display1D and showEMA200 ? ema200_1D : na, title = "1D EMA 200", color = emaColor1D, linewidth = lineWidth200, linestyle = plot.linestyle_solid)
+plot(display1D and showSMA50  ? sma50_1D  : na, title = "1D SMA 50",  color = smaColor1D, linewidth = lineWidth50,  linestyle = plot.linestyle_dashed)
+plot(display1D and showSMA200 ? sma200_1D : na, title = "1D SMA 200", color = smaColor1D, linewidth = lineWidth200, linestyle = plot.linestyle_dashed)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Plots: Weekly
+//──────────────────────────────────────────────────────────────────────────────
+plot(display1W and showEMA50  ? ema50_1W  : na, title = "1W EMA 50",  color = emaColor1W, linewidth = lineWidth50,  linestyle = plot.linestyle_solid)
+plot(display1W and showEMA200 ? ema200_1W : na, title = "1W EMA 200", color = emaColor1W, linewidth = lineWidth200, linestyle = plot.linestyle_solid)
+plot(display1W and showSMA50  ? sma50_1W  : na, title = "1W SMA 50",  color = smaColor1W, linewidth = lineWidth50,  linestyle = plot.linestyle_dashed)
+plot(display1W and showSMA200 ? sma200_1W : na, title = "1W SMA 200", color = smaColor1W, linewidth = lineWidth200, linestyle = plot.linestyle_dashed)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// RSI Swing Detector
+// Based on RSI overbought/oversold cycles.
+// Confirmed labels: HH / LH / HL / LL
+// Developing labels: HH? / LH? / HL? / LL?
+//
+// Color logic:
+// HH / HL = bullish structure = green
+// LH / LL = bearish structure = red
+//──────────────────────────────────────────────────────────────────────────────
+groupSwings = "RSI Swing High / Low Detector"
+
+showSwingDetector = input.bool(true,  "Enable RSI Swing Detector", group = groupSwings)
+showSwingLabels   = input.bool(true,  "Show HH / LH / HL / LL Labels", group = groupSwings)
+showSwingLines    = input.bool(false, "Show Swing Connection Lines", group = groupSwings)
+
+rsiLength     = input.int(7,  "RSI Length", minval = 1, group = groupSwings)
+rsiOverbought = input.int(65, "RSI Overbought", minval = 51, maxval = 100, group = groupSwings)
+rsiOversold   = input.int(35, "RSI Oversold", minval = 1, maxval = 49, group = groupSwings)
+
+bullishStructureLabelColor = input.color(
+     color.rgb(76, 175, 80),
+     "Bullish Structure Label Color",
+     group = groupSwings
+)
+
+bearishStructureLabelColor = input.color(
+     color.rgb(244, 67, 54),
+     "Bearish Structure Label Color",
+     group = groupSwings
+)
+
+swingLineColor = input.color(
+     color.new(color.gray, 40),
+     "Swing Line Color",
+     group = groupSwings
+)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// RSI swing state
+// RSI source is intentionally fixed to close.
+//──────────────────────────────────────────────────────────────────────────────
+rsiValue = ta.rsi(close, rsiLength)
+
+isOverbought = rsiValue >= rsiOverbought
+isOversold   = rsiValue <= rsiOversold
+
+// 0 = not initialized, 1 = last extreme cycle is overbought, 2 = last extreme cycle is oversold
+var int swingLastState = 0
+
+// Current developing swing extremes
+var float swingHH = low
+var float swingLL = high
+
+// Bar indices of current developing extreme
+var int swingHHBarIndex = na
+var int swingLLBarIndex = na
+
+// Previous confirmed same-side swings for HH/LH and HL/LL classification
+var float previousSwingHigh = na
+var float previousSwingLow  = na
+
+// Current active labels
+var label swingHighLabel = na
+var label swingLowLabel  = na
+
+// Current active swing lines
+var line swingUpLine   = na
+var line swingDownLine = na
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Structure classification functions
+//──────────────────────────────────────────────────────────────────────────────
+f_isBullishHighStructure(_price) =>
+    na(previousSwingHigh) or _price > previousSwingHigh
+
+f_isBullishLowStructure(_price) =>
+    na(previousSwingLow) or _price > previousSwingLow
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Label text functions
+// _developing = true adds "?" to show the swing is not yet confirmed.
+//──────────────────────────────────────────────────────────────────────────────
+f_highSwingText(_price, _developing) =>
+    baseText = f_isBullishHighStructure(_price) ? "HH" : "LH"
+    _developing ? baseText + "?" : baseText
+
+f_lowSwingText(_price, _developing) =>
+    baseText = f_isBullishLowStructure(_price) ? "HL" : "LL"
+    _developing ? baseText + "?" : baseText
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Label color functions
+// HH / HL = green
+// LH / LL = red
+// Developing labels are shown more transparently.
+//──────────────────────────────────────────────────────────────────────────────
+f_highSwingColor(_price, _developing) =>
+    baseColor = f_isBullishHighStructure(_price) ? bullishStructureLabelColor : bearishStructureLabelColor
+    _developing ? color.new(baseColor, 45) : baseColor
+
+f_lowSwingColor(_price, _developing) =>
+    baseColor = f_isBullishLowStructure(_price) ? bullishStructureLabelColor : bearishStructureLabelColor
+    _developing ? color.new(baseColor, 45) : baseColor
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Label creation functions
+//──────────────────────────────────────────────────────────────────────────────
+f_createHighLabel(_x, _y, _developing) =>
+    label.new(
+         x = _x,
+         y = _y,
+         text = f_highSwingText(_y, _developing),
+         yloc = yloc.price,
+         style = label.style_label_down,
+         color = f_highSwingColor(_y, _developing),
+         textcolor = color.white,
+         size = size.tiny
+    )
+
+f_createLowLabel(_x, _y, _developing) =>
+    label.new(
+         x = _x,
+         y = _y,
+         text = f_lowSwingText(_y, _developing),
+         yloc = yloc.price,
+         style = label.style_label_up,
+         color = f_lowSwingColor(_y, _developing),
+         textcolor = color.white,
+         size = size.tiny
+    )
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Update current developing swing labels and lines
+//──────────────────────────────────────────────────────────────────────────────
+f_updateDevelopingHighSwing(_x, _y) =>
+    if showSwingLabels and not na(swingHighLabel)
+        label.set_x(swingHighLabel, _x)
+        label.set_y(swingHighLabel, _y)
+        label.set_text(swingHighLabel, f_highSwingText(_y, true))
+        label.set_color(swingHighLabel, f_highSwingColor(_y, true))
+
+    if showSwingLines and not na(swingUpLine)
+        line.set_x1(swingUpLine, _x)
+        line.set_y1(swingUpLine, _y)
+
+f_updateDevelopingLowSwing(_x, _y) =>
+    if showSwingLabels and not na(swingLowLabel)
+        label.set_x(swingLowLabel, _x)
+        label.set_y(swingLowLabel, _y)
+        label.set_text(swingLowLabel, f_lowSwingText(_y, true))
+        label.set_color(swingLowLabel, f_lowSwingColor(_y, true))
+
+    if showSwingLines and not na(swingDownLine)
+        line.set_x1(swingDownLine, _x)
+        line.set_y1(swingDownLine, _y)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Finalize previous developing swing once opposite RSI extreme is reached
+//──────────────────────────────────────────────────────────────────────────────
+f_finalizeHighSwing() =>
+    if showSwingLabels and not na(swingHighLabel)
+        label.set_text(swingHighLabel, f_highSwingText(swingHH, false))
+        label.set_color(swingHighLabel, f_highSwingColor(swingHH, false))
+
+f_finalizeLowSwing() =>
+    if showSwingLabels and not na(swingLowLabel)
+        label.set_text(swingLowLabel, f_lowSwingText(swingLL, false))
+        label.set_color(swingLowLabel, f_lowSwingColor(swingLL, false))
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Swing detector logic
+//──────────────────────────────────────────────────────────────────────────────
+if showSwingDetector
+
+    // Transition: oversold cycle -> overbought cycle
+    // The previous low is now confirmed.
+    if swingLastState == 2 and isOverbought
+        f_finalizeLowSwing()
+        previousSwingLow := swingLL
+
+        swingHH := high
+        swingHHBarIndex := bar_index
+
+        if showSwingLabels
+            swingHighLabel := f_createHighLabel(swingHHBarIndex, swingHH, true)
+
+        if showSwingLines and not na(swingLLBarIndex)
+            swingUpLine := line.new(
+                 x1 = swingHHBarIndex,
+                 y1 = swingHH,
+                 x2 = swingLLBarIndex,
+                 y2 = swingLL,
+                 color = swingLineColor,
+                 width = 1
+            )
+
+    // Transition: overbought cycle -> oversold cycle
+    // The previous high is now confirmed.
+    if swingLastState == 1 and isOversold
+        f_finalizeHighSwing()
+        previousSwingHigh := swingHH
+
+        swingLL := low
+        swingLLBarIndex := bar_index
+
+        if showSwingLabels
+            swingLowLabel := f_createLowLabel(swingLLBarIndex, swingLL, true)
+
+        if showSwingLines and not na(swingHHBarIndex)
+            swingDownLine := line.new(
+                 x1 = swingLLBarIndex,
+                 y1 = swingLL,
+                 x2 = swingHHBarIndex,
+                 y2 = swingHH,
+                 color = swingLineColor,
+                 width = 1
+            )
+
+    // State updates from current RSI condition
+    if isOverbought
+        swingLastState := 1
+
+    if isOversold
+        swingLastState := 2
+
+    // While in an overbought-led cycle, the swing high keeps following price
+    // until a new oversold cycle starts.
+    if swingLastState == 1
+        if na(swingHHBarIndex)
+            swingHH := high
+            swingHHBarIndex := bar_index
+
+        if high >= swingHH
+            swingHH := high
+            swingHHBarIndex := bar_index
+            f_updateDevelopingHighSwing(swingHHBarIndex, swingHH)
+
+    // While in an oversold-led cycle, the swing low keeps following price
+    // until a new overbought cycle starts.
+    if swingLastState == 2
+        if na(swingLLBarIndex)
+            swingLL := low
+            swingLLBarIndex := bar_index
+
+        if low <= swingLL
+            swingLL := low
+            swingLLBarIndex := bar_index
+            f_updateDevelopingLowSwing(swingLLBarIndex, swingLL)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// RSI MTF Dashboard + Current Chart RSI Divergence Labels
+// Compact MTF momentum dashboard for RSI confluence.
+//──────────────────────────────────────────────────────────────────────────────
+groupRSIPanel = "RSI MTF Dashboard"
+
+showRSIPanel = input.bool(true, "Show RSI MTF Dashboard", group = groupRSIPanel)
+
+rsiPanelLength   = input.int(14, "RSI Length", minval = 1, group = groupRSIPanel)
+rsiPanelMALength = input.int(14, "RSI MA Length", minval = 1, group = groupRSIPanel)
+
+rsiCrossMaxAge = input.int(
+     15,
+     "MA Cross Max Age in Bars",
+     minval = 1,
+     group = groupRSIPanel,
+     tooltip = "Only shows Bull/Bear RSI-MA crosses if the last cross is not older than this number of bars on the respective timeframe."
+)
+
+rsiPanelPositionInput = input.string(
+     "Top Right",
+     "Panel Position",
+     options = ["Top Right", "Top Left", "Bottom Right", "Bottom Left"],
+     group = groupRSIPanel
+)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// RSI divergence settings
+// Current chart labels + 1H/4H dashboard divergence rows.
+//──────────────────────────────────────────────────────────────────────────────
+groupRSIDiv = "RSI Regular Divergences"
+
+showRSIDivergenceLabels = input.bool(
+     true,
+     "Show Current Chart Bullish / Bearish Divergence Labels",
+     group = groupRSIDiv
+)
+
+showMTFDivergenceRows = input.bool(
+     true,
+     "Show 1H / 4H Divergence Rows in Dashboard",
+     group = groupRSIDiv
+)
+
+rsiDivPivotLeft = input.int(
+     5,
+     "Pivot Left Bars",
+     minval = 1,
+     group = groupRSIDiv
+)
+
+rsiDivPivotRight = input.int(
+     5,
+     "Pivot Right Bars",
+     minval = 1,
+     group = groupRSIDiv
+)
+
+rsiDivPanelMaxAge = input.int(
+     50,
+     "Dashboard: Max Divergence Age in Bars",
+     minval = 1,
+     group = groupRSIDiv,
+     tooltip = "The dashboard only reports 1H/4H divergences while they are not older than this number of bars on their respective timeframe."
+)
+
+rsiDivLabelOffsetATR = input.float(
+     0.35,
+     "Divergence Label Offset (ATR)",
+     minval = 0.05,
+     maxval = 3.0,
+     step = 0.05,
+     group = groupRSIDiv,
+     tooltip = "Vertical distance of current-chart divergence labels from the pivot, measured in ATR multiples."
+)
+
+bullDivLabelColor = input.color(
+     color.rgb(76, 175, 80),
+     "Bullish Divergence Label Color",
+     group = groupRSIDiv
+)
+
+bearDivLabelColor = input.color(
+     color.rgb(244, 67, 54),
+     "Bearish Divergence Label Color",
+     group = groupRSIDiv
+)
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Helper: RSI MTF stats
+// Returns:
+// value, regime, momentum direction, RSI-vs-MA state, recent cross direction
+//
+// regime:
+//  2 = Overbought
+//  1 = Above 50
+// -1 = Below 50
+// -2 = Oversold
+//
+// momentum:
+//  1 = rising
+// -1 = falling
+//  0 = flat
+//
+// vs MA:
+//  1 = above MA
+// -1 = below MA
+//  0 = at MA
+//
+// cross:
+//  1 = recent bull cross
+// -1 = recent bear cross
+//  0 = no recent cross
+//──────────────────────────────────────────────────────────────────────────────
+f_rsiMtfStats(_rsiLen, _maLen, _crossMaxAge) =>
+    _rsi = ta.rsi(close, _rsiLen)
+    _ma  = ta.sma(_rsi, _maLen)
+
+    _regime =
+         _rsi >= 70 ? 2 :
+         _rsi <= 30 ? -2 :
+         _rsi >= 50 ? 1 :
+         -1
+
+    _momentum =
+         _rsi > _rsi[1] ? 1 :
+         _rsi < _rsi[1] ? -1 :
+         0
+
+    _vsMa =
+         _rsi > _ma ? 1 :
+         _rsi < _ma ? -1 :
+         0
+
+    _bullCross = ta.crossover(_rsi, _ma)
+    _bearCross = ta.crossunder(_rsi, _ma)
+
+    _barsSinceBull = ta.barssince(_bullCross)
+    _barsSinceBear = ta.barssince(_bearCross)
+
+    _hasBull = not na(_barsSinceBull) and _barsSinceBull <= _crossMaxAge
+    _hasBear = not na(_barsSinceBear) and _barsSinceBear <= _crossMaxAge
+
+    _cross =
+         _hasBull and (not _hasBear or _barsSinceBull < _barsSinceBear) ? 1 :
+         _hasBear and (not _hasBull or _barsSinceBear < _barsSinceBull) ? -1 :
+         0
+
+    [_rsi, _regime, _momentum, _vsMa, _cross]
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Helper: Regular RSI divergence state for dashboard
+// Returns:
+// div direction, bars since divergence
+//
+// div direction:
+//  1 = bullish regular divergence
+// -1 = bearish regular divergence
+//  0 = none / too old
+//──────────────────────────────────────────────────────────────────────────────
+f_rsiDivState(_rsiLen, _left, _right, _maxAge) =>
+    _rsi = ta.rsi(close, _rsiLen)
+
+    _pivotLow  = ta.pivotlow(low, _left, _right)
+    _pivotHigh = ta.pivothigh(high, _left, _right)
+
+    _isPivotLow  = not na(_pivotLow)
+    _isPivotHigh = not na(_pivotHigh)
+
+    _currentLowPrice  = _pivotLow
+    _currentHighPrice = _pivotHigh
+
+    _currentLowRsi  = _rsi[_right]
+    _currentHighRsi = _rsi[_right]
+
+    var float _previousLowPrice  = na
+    var float _previousLowRsi    = na
+    var float _previousHighPrice = na
+    var float _previousHighRsi   = na
+
+    var int _lastDivDirection = 0
+    var int _lastDivBarIndex = na
+
+    if _isPivotLow
+        _bullDiv =
+             not na(_previousLowPrice) and
+             not na(_previousLowRsi) and
+             _currentLowPrice < _previousLowPrice and
+             _currentLowRsi > _previousLowRsi
+
+        if _bullDiv
+            _lastDivDirection := 1
+            _lastDivBarIndex := bar_index - _right
+
+        _previousLowPrice := _currentLowPrice
+        _previousLowRsi   := _currentLowRsi
+
+    if _isPivotHigh
+        _bearDiv =
+             not na(_previousHighPrice) and
+             not na(_previousHighRsi) and
+             _currentHighPrice > _previousHighPrice and
+             _currentHighRsi < _previousHighRsi
+
+        if _bearDiv
+            _lastDivDirection := -1
+            _lastDivBarIndex := bar_index - _right
+
+        _previousHighPrice := _currentHighPrice
+        _previousHighRsi   := _currentHighRsi
+
+    _barsSinceDiv = na(_lastDivBarIndex) ? na : bar_index - _lastDivBarIndex
+    _isRecent = not na(_barsSinceDiv) and _barsSinceDiv <= _maxAge
+
+    [_isRecent ? _lastDivDirection : 0, _isRecent ? _barsSinceDiv : na]
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// MTF RSI requests
+//──────────────────────────────────────────────────────────────────────────────
+[rsi15m, regime15m, momentum15m, vsMa15m, cross15m] = request.security(syminfo.tickerid, "15",  f_rsiMtfStats(rsiPanelLength, rsiPanelMALength, rsiCrossMaxAge))
+[rsi1h,  regime1h,  momentum1h,  vsMa1h,  cross1h]  = request.security(syminfo.tickerid, "60",  f_rsiMtfStats(rsiPanelLength, rsiPanelMALength, rsiCrossMaxAge))
+[rsi4h,  regime4h,  momentum4h,  vsMa4h,  cross4h]  = request.security(syminfo.tickerid, "240", f_rsiMtfStats(rsiPanelLength, rsiPanelMALength, rsiCrossMaxAge))
+[rsi1D,  regime1D,  momentum1D,  vsMa1D,  cross1D]  = request.security(syminfo.tickerid, "D",   f_rsiMtfStats(rsiPanelLength, rsiPanelMALength, rsiCrossMaxAge))
+[rsi1W,  regime1W,  momentum1W,  vsMa1W,  cross1W]  = request.security(syminfo.tickerid, "W",   f_rsiMtfStats(rsiPanelLength, rsiPanelMALength, rsiCrossMaxAge))
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// 1H / 4H divergence requests for dashboard
+//──────────────────────────────────────────────────────────────────────────────
+[div1hDirection, div1hAge] = request.security(syminfo.tickerid, "60",  f_rsiDivState(rsiPanelLength, rsiDivPivotLeft, rsiDivPivotRight, rsiDivPanelMaxAge))
+[div4hDirection, div4hAge] = request.security(syminfo.tickerid, "240", f_rsiDivState(rsiPanelLength, rsiDivPivotLeft, rsiDivPivotRight, rsiDivPanelMaxAge))
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Current chart divergence labels
+//──────────────────────────────────────────────────────────────────────────────
+rsiPanelValue = ta.rsi(close, rsiPanelLength)
+
+pricePivotLow  = ta.pivotlow(low,  rsiDivPivotLeft, rsiDivPivotRight)
+pricePivotHigh = ta.pivothigh(high, rsiDivPivotLeft, rsiDivPivotRight)
+
+isConfirmedPivotLow  = not na(pricePivotLow)
+isConfirmedPivotHigh = not na(pricePivotHigh)
+
+currentPivotLowPrice  = pricePivotLow
+currentPivotHighPrice = pricePivotHigh
+
+currentPivotLowRSI  = rsiPanelValue[rsiDivPivotRight]
+currentPivotHighRSI = rsiPanelValue[rsiDivPivotRight]
+
+var float previousPivotLowPrice  = na
+var float previousPivotLowRSI    = na
+var float previousPivotHighPrice = na
+var float previousPivotHighRSI   = na
+
+bool bullishRegularDiv = false
+bool bearishRegularDiv = false
+
+rsiDivLabelOffset = ta.atr(14) * rsiDivLabelOffsetATR
+
+if isConfirmedPivotLow
+    bullishRegularDiv :=
+         not na(previousPivotLowPrice) and
+         not na(previousPivotLowRSI) and
+         currentPivotLowPrice < previousPivotLowPrice and
+         currentPivotLowRSI > previousPivotLowRSI
+
+    if bullishRegularDiv and showRSIDivergenceLabels
+        label.new(
+             x = bar_index - rsiDivPivotRight,
+             y = currentPivotLowPrice - rsiDivLabelOffset[rsiDivPivotRight],
+             text = "Bull Div",
+             yloc = yloc.price,
+             style = label.style_label_up,
+             color = bullDivLabelColor,
+             textcolor = color.white,
+             size = size.tiny
+        )
+
+    previousPivotLowPrice := currentPivotLowPrice
+    previousPivotLowRSI   := currentPivotLowRSI
+
+if isConfirmedPivotHigh
+    bearishRegularDiv :=
+         not na(previousPivotHighPrice) and
+         not na(previousPivotHighRSI) and
+         currentPivotHighPrice > previousPivotHighPrice and
+         currentPivotHighRSI < previousPivotHighRSI
+
+    if bearishRegularDiv and showRSIDivergenceLabels
+        label.new(
+             x = bar_index - rsiDivPivotRight,
+             y = currentPivotHighPrice + rsiDivLabelOffset[rsiDivPivotRight],
+             text = "Bear Div",
+             yloc = yloc.price,
+             style = label.style_label_down,
+             color = bearDivLabelColor,
+             textcolor = color.white,
+             size = size.tiny
+        )
+
+    previousPivotHighPrice := currentPivotHighPrice
+    previousPivotHighRSI   := currentPivotHighRSI
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Dashboard formatting helpers
+//──────────────────────────────────────────────────────────────────────────────
+f_regimeText(_regime) =>
+    _regime == 2 ? "OB" :
+     _regime == -2 ? "OS" :
+     _regime == 1 ? ">50" :
+     "<50"
+
+f_momentumText(_momentum) =>
+    _momentum == 1 ? "↑" :
+     _momentum == -1 ? "↓" :
+     "→"
+
+f_vsMaText(_vsMa) =>
+    _vsMa == 1 ? "Above" :
+     _vsMa == -1 ? "Below" :
+     "At"
+
+f_crossText(_cross) =>
+    _cross == 1 ? "Bull" :
+     _cross == -1 ? "Bear" :
+     "None"
+
+f_divText(_direction, _age) =>
+    _direction == 1 ? "Bullish · " + str.tostring(_age) + " bars ago" :
+     _direction == -1 ? "Bearish · " + str.tostring(_age) + " bars ago" :
+     "None"
+
+f_regimeColor(_regime) =>
+    _regime == 2 ? color.rgb(255, 152, 0) :
+     _regime == -2 ? color.rgb(255, 152, 0) :
+     _regime == 1 ? color.rgb(76, 175, 80) :
+     color.rgb(244, 67, 54)
+
+f_momentumColor(_momentum) =>
+    _momentum == 1 ? color.rgb(76, 175, 80) :
+     _momentum == -1 ? color.rgb(244, 67, 54) :
+     color.gray
+
+f_vsMaColor(_vsMa) =>
+    _vsMa == 1 ? color.rgb(76, 175, 80) :
+     _vsMa == -1 ? color.rgb(244, 67, 54) :
+     color.gray
+
+f_crossColor(_cross) =>
+    _cross == 1 ? color.rgb(76, 175, 80) :
+     _cross == -1 ? color.rgb(244, 67, 54) :
+     color.gray
+
+f_divColor(_direction) =>
+    _direction == 1 ? color.rgb(76, 175, 80) :
+     _direction == -1 ? color.rgb(244, 67, 54) :
+     color.gray
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Dashboard style
+//──────────────────────────────────────────────────────────────────────────────
+panelBg         = color.new(color.black, 15)
+panelHeaderBg   = color.new(color.white, 86)
+panelRowBg      = color.new(color.black, 28)
+panelAltRowBg   = color.new(color.black, 40)
+panelBorder     = color.new(color.white, 72)
+panelText       = color.white
+panelMutedText  = color.new(color.white, 30)
+
+rsiPanelPosition =
+     rsiPanelPositionInput == "Top Left"     ? position.top_left :
+     rsiPanelPositionInput == "Bottom Right" ? position.bottom_right :
+     rsiPanelPositionInput == "Bottom Left"  ? position.bottom_left :
+     position.top_right
+
+
+//──────────────────────────────────────────────────────────────────────────────
+// Create and update dashboard
+// Table: 6 columns x 8 rows
+// Columns: Label, 15m, 1h, 4h, D, W
+// Rows: Header, Value, Regime, Momentum, RSI vs MA, MA Cross, 1H Div, 4H Div
+//──────────────────────────────────────────────────────────────────────────────
+var table rsiPanel = table.new(
+     rsiPanelPosition,
+     6,
+     8,
+     bgcolor = panelBg,
+     frame_color = panelBorder,
+     frame_width = 1,
+     border_color = panelBorder,
+     border_width = 1
+)
+
+f_cell(_col, _row, _text, _textColor, _bgColor) =>
+    table.cell(
+         rsiPanel,
+         _col,
+         _row,
+         _text,
+         text_color = _textColor,
+         text_size = size.small,
+         bgcolor = _bgColor
+    )
+
+if barstate.islast
+    if showRSIPanel
+        // Header
+        f_cell(0, 0, "RSI MTF", panelText, panelHeaderBg)
+        f_cell(1, 0, "15m", panelText, panelHeaderBg)
+        f_cell(2, 0, "1h",  panelText, panelHeaderBg)
+        f_cell(3, 0, "4h",  panelText, panelHeaderBg)
+        f_cell(4, 0, "D",   panelText, panelHeaderBg)
+        f_cell(5, 0, "W",   panelText, panelHeaderBg)
+
+        // Value
+        f_cell(0, 1, "Value", panelMutedText, panelRowBg)
+        f_cell(1, 1, str.tostring(rsi15m, "#.0"), panelText, panelRowBg)
+        f_cell(2, 1, str.tostring(rsi1h,  "#.0"), panelText, panelRowBg)
+        f_cell(3, 1, str.tostring(rsi4h,  "#.0"), panelText, panelRowBg)
+        f_cell(4, 1, str.tostring(rsi1D,  "#.0"), panelText, panelRowBg)
+        f_cell(5, 1, str.tostring(rsi1W,  "#.0"), panelText, panelRowBg)
+
+        // Regime
+        f_cell(0, 2, "Regime", panelMutedText, panelAltRowBg)
+        f_cell(1, 2, f_regimeText(regime15m), f_regimeColor(regime15m), panelAltRowBg)
+        f_cell(2, 2, f_regimeText(regime1h),  f_regimeColor(regime1h),  panelAltRowBg)
+        f_cell(3, 2, f_regimeText(regime4h),  f_regimeColor(regime4h),  panelAltRowBg)
+        f_cell(4, 2, f_regimeText(regime1D),  f_regimeColor(regime1D),  panelAltRowBg)
+        f_cell(5, 2, f_regimeText(regime1W),  f_regimeColor(regime1W),  panelAltRowBg)
+
+        // Momentum
+        f_cell(0, 3, "Momentum", panelMutedText, panelRowBg)
+        f_cell(1, 3, f_momentumText(momentum15m), f_momentumColor(momentum15m), panelRowBg)
+        f_cell(2, 3, f_momentumText(momentum1h),  f_momentumColor(momentum1h),  panelRowBg)
+        f_cell(3, 3, f_momentumText(momentum4h),  f_momentumColor(momentum4h),  panelRowBg)
+        f_cell(4, 3, f_momentumText(momentum1D),  f_momentumColor(momentum1D),  panelRowBg)
+        f_cell(5, 3, f_momentumText(momentum1W),  f_momentumColor(momentum1W),  panelRowBg)
+
+        // RSI vs MA
+        f_cell(0, 4, "RSI vs MA", panelMutedText, panelAltRowBg)
+        f_cell(1, 4, f_vsMaText(vsMa15m), f_vsMaColor(vsMa15m), panelAltRowBg)
+        f_cell(2, 4, f_vsMaText(vsMa1h),  f_vsMaColor(vsMa1h),  panelAltRowBg)
+        f_cell(3, 4, f_vsMaText(vsMa4h),  f_vsMaColor(vsMa4h),  panelAltRowBg)
+        f_cell(4, 4, f_vsMaText(vsMa1D),  f_vsMaColor(vsMa1D),  panelAltRowBg)
+        f_cell(5, 4, f_vsMaText(vsMa1W),  f_vsMaColor(vsMa1W),  panelAltRowBg)
+
+        // MA Cross
+        f_cell(0, 5, "MA Cross", panelMutedText, panelRowBg)
+        f_cell(1, 5, f_crossText(cross15m), f_crossColor(cross15m), panelRowBg)
+        f_cell(2, 5, f_crossText(cross1h),  f_crossColor(cross1h),  panelRowBg)
+        f_cell(3, 5, f_crossText(cross4h),  f_crossColor(cross4h),  panelRowBg)
+        f_cell(4, 5, f_crossText(cross1D),  f_crossColor(cross1D),  panelRowBg)
+        f_cell(5, 5, f_crossText(cross1W),  f_crossColor(cross1W),  panelRowBg)
+
+        // 1H Divergence
+        f_cell(0, 6, "1H Div", panelMutedText, panelAltRowBg)
+        f_cell(1, 6, "", panelMutedText, panelAltRowBg)
+        f_cell(2, 6, showMTFDivergenceRows ? f_divText(div1hDirection, div1hAge) : "Off", showMTFDivergenceRows ? f_divColor(div1hDirection) : color.gray, panelAltRowBg)
+        f_cell(3, 6, "", panelMutedText, panelAltRowBg)
+        f_cell(4, 6, "", panelMutedText, panelAltRowBg)
+        f_cell(5, 6, "", panelMutedText, panelAltRowBg)
+
+        // 4H Divergence
+        f_cell(0, 7, "4H Div", panelMutedText, panelRowBg)
+        f_cell(1, 7, "", panelMutedText, panelRowBg)
+        f_cell(2, 7, "", panelMutedText, panelRowBg)
+        f_cell(3, 7, showMTFDivergenceRows ? f_divText(div4hDirection, div4hAge) : "Off", showMTFDivergenceRows ? f_divColor(div4hDirection) : color.gray, panelRowBg)
+        f_cell(4, 7, "", panelMutedText, panelRowBg)
+        f_cell(5, 7, "", panelMutedText, panelRowBg)
+
+    else
+        table.clear(rsiPanel, 0, 0, 5, 7)

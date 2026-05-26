@@ -1,0 +1,1415 @@
+//@version=6
+indicator("SMC ICT2026 CLEAN STRUCTURE CORE — D843 SMC5M OB SOURCE FILTER", overlay=true, max_bars_back=5000, max_lines_count=500, max_labels_count=500, max_boxes_count=300)
+
+//====================================================
+// 0) INPUTS
+//====================================================
+grpCore = "01 Core"
+pivLen      = input.int(5, "Pivot length", minval=2, maxval=20, group=grpCore)
+atrLen      = input.int(14, "ATR", minval=1, group=grpCore)
+lineBars    = input.int(60, "Line extend bars", minval=5, maxval=300, group=grpCore)
+showLabels  = input.bool(true, "Show labels", group=grpCore)
+showLines   = input.bool(true, "Show lines", group=grpCore)
+
+// EMA / RSI / VOLUME
+grpFilter = "02 EMA / RSI / Volume Filter"
+showEMA     = input.bool(true, "Show EMA 12/26/34", group=grpFilter)
+rsiLen      = input.int(14, "RSI length", minval=2, group=grpFilter)
+rsiEmaLen   = input.int(9, "EMA RSI length", minval=2, group=grpFilter)
+volEmaLen   = input.int(20, "EMA Volume length", minval=1, group=grpFilter)
+volMult     = input.float(1.10, "Volume expansion x", minval=0.1, step=0.05, group=grpFilter)
+useFilters  = input.bool(true, "Use RSI + EMA RSI + EMA Volume conditions", group=grpFilter)
+
+// SR / RES SUP
+// SMC5M rule:
+// - RES 60 / SUP 60 = BOX zones only, no line.
+// - SR RES 200 / SR SUP 200 = LINE only.
+grpSR = "03 RES/SUP / SR"
+srFastLen   = input.int(60, "RES/SUP 60 box lookback", minval=5, maxval=500, group=grpSR)
+srOldLen    = input.int(200, "SR RES/SUP 200 line lookback", minval=20, maxval=1000, group=grpSR)
+srAtrTol    = input.float(0.30, "RES/SUP box ATR tolerance", minval=0.01, step=0.05, group=grpSR)
+showResSup60Boxes = input.bool(true, "Show RES 60 / SUP 60 boxes", group=grpSR)
+showResSup60Labels = input.bool(true, "Show RES 60 / SUP 60 labels inside boxes", group=grpSR)
+showSr200Lines    = input.bool(true, "Show SR RES 200 / SR SUP 200 lines", group=grpSR)
+res60BoxColor     = input.color(color.red, "RES 60 box color", group=grpSR)
+sup60BoxColor     = input.color(color.lime, "SUP 60 box color", group=grpSR)
+srRes200Color     = input.color(color.orange, "SR RES 200 line color", group=grpSR)
+srSup200Color     = input.color(color.aqua, "SR SUP 200 line color", group=grpSR)
+srBoxTransp       = input.int(88, "RES/SUP 60 box transparency", minval=0, maxval=100, group=grpSR)
+
+// FVG / IFVG / OB — SMC5M box engine
+grpZone = "04 FVG / IFVG / OB"
+showFVG     = input.bool(true, "Show FVG / IFVG", group=grpZone)
+showOB      = input.bool(true, "Show OB BUY / OB SELL", group=grpZone)
+showZoneText= input.bool(true, "Show text inside boxes", group=grpZone)
+liveBoxToCurrent = input.bool(true, "Latest boxes extend to current candle only", group=grpZone)
+oldShortBars = input.int(8, "Old boxes short length bars", minval=1, maxval=120, group=grpZone)
+maxFvgBuy   = input.int(2, "FVG BUY max active", minval=0, maxval=10, group=grpZone)
+maxFvgSell  = input.int(2, "FVG SELL max active", minval=0, maxval=10, group=grpZone)
+maxIfvgBuy  = input.int(1, "IFVG BUY max active", minval=0, maxval=10, group=grpZone)
+maxIfvgSell = input.int(1, "IFVG SELL max active", minval=0, maxval=10, group=grpZone)
+maxObBuy    = input.int(1, "OB BUY max active", minval=0, maxval=10, group=grpZone)
+maxObSell   = input.int(1, "OB SELL max active", minval=0, maxval=10, group=grpZone)
+bodyFillDelete = input.bool(true, "Shrink FVG/IFVG when candle BODY penetrates box", group=grpZone)
+obBodyCloseDelete = input.bool(true, "Delete OB only when BODY closes through / fully fills", group=grpZone)
+minGapAtr   = input.float(0.02, "Min FVG gap ATR", minval=0.0, maxval=2.0, step=0.01, group=grpZone)
+zoneNeedResSup60 = input.bool(false, "FVG/IFVG/OB must be near RES 60 / SUP 60", group=grpZone)
+zoneNearAtr = input.float(0.50, "Near RES/SUP tolerance ATR", minval=0.0, maxval=5.0, step=0.05, group=grpZone)
+need2Confirm= input.bool(true, "OB needs 2 confirmation candles", group=grpZone)
+
+// FIBO / VP / VWAP / H1
+grpFib = "05 Fibo / VP / VWAP / H1"
+showFib     = input.bool(true, "Show Fibo near entry zones", group=grpFib)
+fibOnlyNearEntryZone = input.bool(true, "Only show fibo near possible entry zone", group=grpFib)
+fibNearAtr  = input.float(0.80, "Fibo near zone tolerance ATR", minval=0.0, maxval=5.0, step=0.05, group=grpFib)
+vpLen       = input.int(60, "POC/VAH/VAL rolling bars", minval=10, maxval=300, group=grpFib)
+showVP      = input.bool(true, "Show POC / VAH / VAL / VWAP", group=grpFib)
+showH1      = input.bool(true, "Show H1 BOS/CHoCH/MSS line + label", group=grpFib)
+showH4      = input.bool(true, "Show H4 BOS/CHoCH/MSS line + label", group=grpFib)
+htfForwardBars = input.int(24, "H1/H4 true-time forward bars", minval=2, maxval=120, group=grpFib)
+h1LineWidth = input.int(3, "H1 line width", minval=1, maxval=6, group=grpFib)
+h4LineWidth = input.int(4, "H4 line width", minval=1, maxval=6, group=grpFib)
+htfHistMax  = input.int(80, "H1/H4 max history lines", minval=10, maxval=200, group=grpFib)
+
+grpD568Retest = "D568 - Pivot Retest Line"
+d568_showRecentRetestOnly = input.bool(true, "Show Recent Retest Only", group=grpD568Retest)
+d568_recentRetestBars = input.int(20, "Recent Retest Length", minval=3, maxval=100, group=grpD568Retest)
+d568_extendBars = input.int(50, "Retest Extend Bars", minval=5, maxval=300, group=grpD568Retest)
+d568_showRetestLine = input.bool(true, "Show Retest Line", group=grpD568Retest)
+d568_width = input.int(2, "Retest Line Width", minval=1, maxval=6, group=grpD568Retest)
+d568_bullColor = input.color(color.aqua, "Bull Structure Retest Line", group=grpD568Retest)
+d568_bearColor = input.color(color.orange, "Bear Structure Retest Line", group=grpD568Retest)
+
+//====================================================
+// 1) CORE CANDLE / FILTERS
+//====================================================
+atr = ta.atr(atrLen)
+bodyTop = math.max(open, close)
+bodyBot = math.min(open, close)
+body = math.max(math.abs(close - open), syminfo.mintick)
+rng = math.max(high - low, syminfo.mintick)
+upWick = high - bodyTop
+dnWick = bodyBot - low
+isBull = close > open
+isBear = close < open
+
+ema12 = ta.ema(close, 12)
+ema26 = ta.ema(close, 26)
+ema34 = ta.ema(close, 34)
+emaBull = close >= ema34 and ema12 >= ema26 and ema26 >= ema34 and ema34 >= ema34[1]
+emaBear = close <= ema34 and ema12 <= ema26 and ema26 <= ema34 and ema34 <= ema34[1]
+
+rsi = ta.rsi(close, rsiLen)
+rsiEma = ta.ema(rsi, rsiEmaLen)
+volEma = ta.ema(volume, volEmaLen)
+volOK = volume >= volEma * volMult
+buyFlowOK = rsi > rsiEma and rsiEma >= rsiEma[1] and volOK
+sellFlowOK = rsi < rsiEma and rsiEma <= rsiEma[1] and volOK
+
+// SMC5M D375 compatibility aliases
+// D375 strength engine calls rsiBuyOK / rsiSellOK, so keep these names declared.
+rsiBuyOK = rsi > rsiEma and (rsiEma >= 50 or ta.rising(rsiEma, 2))
+rsiSellOK = rsi < rsiEma and (rsiEma <= 50 or ta.falling(rsiEma, 2))
+
+buyFilterOK = not useFilters or (emaBull and buyFlowOK)
+sellFilterOK = not useFilters or (emaBear and sellFlowOK)
+
+plot(showEMA ? ema12 : na, "EMA 12", color=color.new(color.aqua, 0), linewidth=1)
+plot(showEMA ? ema26 : na, "EMA 26", color=color.new(color.yellow, 0), linewidth=1)
+plot(showEMA ? ema34 : na, "EMA 34", color=color.new(color.orange, 0), linewidth=2)
+
+//====================================================
+// 2) HH / HL / LH / LL STRUCTURE
+//====================================================
+ph = ta.pivothigh(high, pivLen, pivLen)
+pl = ta.pivotlow(low, pivLen, pivLen)
+
+var float lastPH = na
+var float prevPH = na
+var int   lastPHBar = na
+var float lastPL = na
+var float prevPL = na
+var int   lastPLBar = na
+var int   trendState = 0   // 1 bull, -1 bear
+
+newPH = not na(ph)
+newPL = not na(pl)
+
+hh = false
+lh = false
+hl = false
+ll = false
+
+if newPH
+    prevPH := lastPH
+    lastPH := ph
+    lastPHBar := bar_index - pivLen
+    hh := not na(prevPH) and lastPH > prevPH
+    lh := not na(prevPH) and lastPH < prevPH
+    if hh
+        trendState := 1
+    if lh and trendState == 1
+        trendState := -1
+
+if newPL
+    prevPL := lastPL
+    lastPL := pl
+    lastPLBar := bar_index - pivLen
+    hl := not na(prevPL) and lastPL > prevPL
+    ll := not na(prevPL) and lastPL < prevPL
+    if ll
+        trendState := -1
+    if hl and trendState == -1
+        trendState := 1
+
+f_lbl(_x, _y, _txt, _up, _col) =>
+    if showLabels
+        label.new(_x, _y, _txt, xloc=xloc.bar_index, yloc=yloc.price, style=_up ? label.style_label_up : label.style_label_down, color=_col, textcolor=color.white, size=size.tiny)
+
+if hh
+    f_lbl(lastPHBar, lastPH + atr * 0.15, "HH", false, color.lime)
+if lh
+    f_lbl(lastPHBar, lastPH + atr * 0.15, "LH", false, color.orange)
+if hl
+    f_lbl(lastPLBar, lastPL - atr * 0.15, "HL", true, color.aqua)
+if ll
+    f_lbl(lastPLBar, lastPL - atr * 0.15, "LL", true, color.red)
+
+//====================================================
+// 3) BOS / CHoCH / MSS + EVENT LINES
+//====================================================
+bosUp = not na(lastPH) and ta.crossover(close, lastPH)
+bosDn = not na(lastPL) and ta.crossunder(close, lastPL)
+chochUp = bosUp and trendState == -1
+chochDn = bosDn and trendState == 1
+
+sweepHigh = high > ta.highest(high[1], srFastLen) and close < ta.highest(high[1], srFastLen)
+sweepLow  = low  < ta.lowest(low[1], srFastLen)  and close > ta.lowest(low[1], srFastLen)
+mssUp = sweepLow[1] and bosUp
+mssDn = sweepHigh[1] and bosDn
+
+f_struct_event(_cond, _x1, _price, _txt, _bull) =>
+    if _cond and showLines and not na(_x1) and not na(_price)
+        line.new(_x1, _price, bar_index, _price, xloc=xloc.bar_index, extend=extend.none, color=_bull ? color.lime : color.red, width=2)
+    if _cond and showLabels
+        label.new(bar_index, _bull ? low - atr * 0.25 : high + atr * 0.25, _txt, xloc=xloc.bar_index, yloc=yloc.price, style=_bull ? label.style_label_up : label.style_label_down, color=_bull ? color.lime : color.red, textcolor=color.white, size=size.small)
+
+// DAO: labels are structure events only, not BUY/SELL calls.
+f_struct_event(bosUp and not chochUp and not mssUp, lastPHBar, lastPH, "BOS UP", true)
+f_struct_event(bosDn and not chochDn and not mssDn, lastPLBar, lastPL, "BOS DN", false)
+f_struct_event(chochUp and not mssUp, lastPHBar, lastPH, "CHoCH UP", true)
+f_struct_event(chochDn and not mssDn, lastPLBar, lastPL, "CHoCH DN", false)
+f_struct_event(mssUp, lastPHBar, lastPH, "MSS UP", true)
+f_struct_event(mssDn, lastPLBar, lastPL, "MSS DN", false)
+
+//====================================================
+// 4) H1 / H4 BOS / CHoCH / MSS TRUE HISTORY — PR DAY / SMC5M STYLE
+//====================================================
+// Logic đúng:
+// - H1/H4 line dùng xloc.bar_time.
+// - H1 = 60 phút, H4 = 240 phút, không lấy timeframe chart hiện tại.
+// - Line đang active kéo dài đúng HTF forward.
+// - Khi có line mới cùng TF xuất hiện: line cũ bị CẮT NGAY tại vị trí line mới.
+// - H4 có thể cắt H1 theo priority để chart sạch.
+// - Màu phân biệt BOS / CHoCH / MSS giống D480 SMC5M.
+
+d480_on = true
+d480_showH1 = showH1
+d480_showH4 = showH4
+d480_len = pivLen
+d480_keepLabels = showLabels
+d480_showLines = showLines
+d480_lineForwardBars = htfForwardBars
+d480_h1Width = h1LineWidth
+d480_h4Width = h4LineWidth
+d480_histMaxH1 = htfHistMax
+d480_histMaxH4 = htfHistMax
+d480_sepAtr = 0.28
+d480_oldAlpha = 72
+d480_h4PriorityOverH1 = true
+d480_touchAtr = 0.08
+
+f_d480_pack(_len) =>
+    _ph = ta.pivothigh(high, _len, _len)
+    _pl = ta.pivotlow(low, _len, _len)
+    var float _lastPH = na
+    var float _lastPL = na
+    var int _bias = 0
+    int _etype = 0
+    float _level = na
+    int _eventTime = na
+    if not na(_ph)
+        _lastPH := _ph
+    if not na(_pl)
+        _lastPL := _pl
+    _atr = ta.atr(14)
+    _body = math.abs(close - open)
+    _dispUp = close > open and _body >= _atr * 0.20
+    _dispDn = close < open and _body >= _atr * 0.20
+    _fbHigh = ta.highest(high[1], math.max(_len * 2, 3))
+    _fbLow = ta.lowest(low[1], math.max(_len * 2, 3))
+    _breakPH = not na(_lastPH) and close > _lastPH and close[1] <= _lastPH
+    _breakPL = not na(_lastPL) and close < _lastPL and close[1] >= _lastPL
+    _breakHH = not _breakPH and not na(_fbHigh) and close > _fbHigh and close[1] <= _fbHigh
+    _breakLL = not _breakPL and not na(_fbLow) and close < _fbLow and close[1] >= _fbLow
+    if _breakPH or _breakHH
+        _flipUp = _bias == -1
+        _level := _breakPH ? _lastPH : _fbHigh
+        _etype := _flipUp ? _dispUp ? 3 : 2 : 1
+        _bias := 1
+        _eventTime := time
+    else if _breakPL or _breakLL
+        _flipDn = _bias == 1
+        _level := _breakPL ? _lastPL : _fbLow
+        _etype := _flipDn ? _dispDn ? -3 : -2 : -1
+        _bias := -1
+        _eventTime := time
+    [_etype, _level, _eventTime, _bias]
+
+[d480_h1RawType, d480_h1RawLevel, d480_h1RawTime, d480_h1Bias] = request.security(syminfo.tickerid, "60", f_d480_pack(d480_len), barmerge.gaps_off, barmerge.lookahead_off)
+[d480_h4RawType, d480_h4RawLevel, d480_h4RawTime, d480_h4Bias] = request.security(syminfo.tickerid, "240", f_d480_pack(d480_len), barmerge.gaps_off, barmerge.lookahead_off)
+
+f_d480_type_enabled(_t) =>
+    math.abs(_t) == 1 or math.abs(_t) == 2 or math.abs(_t) == 3
+
+f_d480_txt(_tf, _t) =>
+    _s = _t == 3 ? " MSS UP" : _t == 2 ? " CHOCH UP" : _t == 1 ? " BOS UP" : _t == -3 ? " MSS DN" : _t == -2 ? " CHOCH DN" : _t == -1 ? " BOS DN" : " WAIT"
+    _tf + _s
+
+f_d480_col_tf(_isH4, _t) =>
+    _isH4 ? _t == 3 ? color.new(color.blue, 0) : _t == 2 ? color.new(color.aqua, 0) : _t == 1 ? color.new(color.navy, 0) : _t == -3 ? color.new(color.fuchsia, 0) : _t == -2 ? color.new(color.purple, 0) : _t == -1 ? color.new(color.maroon, 0) : color.new(color.gray, 0) : _t == 3 ? color.new(color.aqua, 0) : _t == 2 ? color.new(color.yellow, 0) : _t == 1 ? color.new(color.lime, 0) : _t == -3 ? color.new(color.fuchsia, 0) : _t == -2 ? color.new(color.orange, 0) : _t == -1 ? color.new(color.red, 0) : color.new(color.gray, 0)
+
+f_d480_vis_y(_isH4, _level, _t) =>
+    _sign = _t > 0 ? 1.0 : _t < 0 ? -1.0 : 1.0
+    _tfOff = _isH4 ? d480_sepAtr : d480_sepAtr * 0.33
+    _typeOff = math.abs(_t) == 3 ? d480_sepAtr * 0.45 : math.abs(_t) == 2 ? d480_sepAtr * 0.22 : 0.0
+    _level + atr * (_tfOff + _typeOff) * _sign
+
+f_d480_touch_level(_level) =>
+    not na(_level) and high >= _level - atr * d480_touchAtr and low <= _level + atr * d480_touchAtr
+
+// TRUE HTF TIME LENGTH
+// H1 = 60m, H4 = 240m. Không dùng timeframe.period của chart.
+d480_msH1 = 60 * 60 * 1000
+d480_msH4 = 240 * 60 * 1000
+
+f_d480_live_x2(_eventTime, _isH4) =>
+    _eventTime + (_isH4 ? d480_msH4 : d480_msH1) * d480_lineForwardBars
+
+f_d480_cut_x2(_ln, _newTime) =>
+    not na(_ln) and not na(_newTime) ? math.min(line.get_x2(_ln), _newTime) : _newTime
+
+f_d480_make_label_x(_eventTime, _isH4) =>
+    f_d480_live_x2(_eventTime, _isH4)
+
+f_d480_trim_history(_lines, _lbls, _max) =>
+    while array.size(_lines) > _max
+        _oldLine = array.shift(_lines)
+        if not na(_oldLine)
+            line.delete(_oldLine)
+    while array.size(_lbls) > _max
+        _oldLbl = array.shift(_lbls)
+        if not na(_oldLbl)
+            label.delete(_oldLbl)
+    0
+
+f_d480_cut_all(_lines, _lbls, _newTime) =>
+    if not na(_newTime)
+        int _n = array.size(_lines)
+        if _n > 0
+            for _i = 0 to _n - 1 by 1
+                _ln = array.get(_lines, _i)
+                if not na(_ln)
+                    line.set_x2(_ln, f_d480_cut_x2(_ln, _newTime))
+                    line.set_extend(_ln, extend.none)
+                    if _i < array.size(_lbls)
+                        _lb = array.get(_lbls, _i)
+                        if not na(_lb)
+                            label.set_x(_lb, line.get_x2(_ln))
+                            label.set_y(_lb, line.get_y2(_ln))
+    0
+
+var array<line> d480_h1HistLines = array.new_line()
+var array<label> d480_h1HistLbls = array.new_label()
+var array<line> d480_h4HistLines = array.new_line()
+var array<label> d480_h4HistLbls = array.new_label()
+
+var int d480_h1Type = 0
+var int d480_h4Type = 0
+var float d480_h1Level = na
+var float d480_h4Level = na
+var int d480_h1Time = na
+var int d480_h4Time = na
+var line d480_h1Line = na
+var line d480_h4Line = na
+var label d480_h1Lbl = na
+var label d480_h4Lbl = na
+var bool d480_h1TouchedChain = false
+var bool d480_h4TouchedChain = false
+
+d480_h1EventChanged = d480_h1RawTime != nz(d480_h1Time) or d480_h1RawType != d480_h1Type or na(d480_h1Level) or math.abs(d480_h1RawLevel - d480_h1Level) > syminfo.mintick
+d480_h4EventChanged = d480_h4RawTime != nz(d480_h4Time) or d480_h4RawType != d480_h4Type or na(d480_h4Level) or math.abs(d480_h4RawLevel - d480_h4Level) > syminfo.mintick
+
+d480_h1RawNewBase = d480_on and d480_showH1 and d480_h1RawType != 0 and not na(d480_h1RawLevel) and not na(d480_h1RawTime) and f_d480_type_enabled(d480_h1RawType) and d480_h1EventChanged
+d480_h4RawNew = d480_on and d480_showH4 and d480_h4RawType != 0 and not na(d480_h4RawLevel) and not na(d480_h4RawTime) and f_d480_type_enabled(d480_h4RawType) and d480_h4EventChanged
+d480_h1SuppressedByH4 = d480_h4PriorityOverH1 and d480_h4RawNew and d480_h1RawNewBase
+d480_h1RawNew = d480_h1RawNewBase and not d480_h1SuppressedByH4
+
+if d480_h1SuppressedByH4
+    f_d480_cut_all(d480_h1HistLines, d480_h1HistLbls, d480_h4RawTime)
+    if not na(d480_h1Line)
+        line.set_x2(d480_h1Line, f_d480_cut_x2(d480_h1Line, d480_h4RawTime))
+        line.set_color(d480_h1Line, color.new(f_d480_col_tf(false, d480_h1Type), d480_oldAlpha))
+        if d480_keepLabels and not na(d480_h1Lbl)
+            label.set_x(d480_h1Lbl, line.get_x2(d480_h1Line))
+            label.set_color(d480_h1Lbl, color.new(f_d480_col_tf(false, d480_h1Type), math.min(d480_oldAlpha + 10, 95)))
+
+if d480_h1RawNew
+    // cắt toàn bộ H1 cũ ngay tại vị trí line H1 mới
+    f_d480_cut_all(d480_h1HistLines, d480_h1HistLbls, d480_h1RawTime)
+    if not na(d480_h1Line)
+        line.set_x2(d480_h1Line, f_d480_cut_x2(d480_h1Line, d480_h1RawTime))
+        line.set_extend(d480_h1Line, extend.none)
+        line.set_color(d480_h1Line, color.new(f_d480_col_tf(false, d480_h1Type), d480_oldAlpha))
+        if d480_keepLabels and not na(d480_h1Lbl)
+            label.set_x(d480_h1Lbl, line.get_x2(d480_h1Line))
+            label.set_y(d480_h1Lbl, line.get_y2(d480_h1Line))
+            label.set_color(d480_h1Lbl, color.new(f_d480_col_tf(false, d480_h1Type), math.min(d480_oldAlpha + 10, 95)))
+    d480_h1Type := d480_h1RawType
+    d480_h1Level := d480_h1RawLevel
+    d480_h1Time := d480_h1RawTime
+    d480_h1TouchedChain := f_d480_touch_level(d480_h1RawLevel)
+    if d480_showLines
+        d480_h1Line := line.new(d480_h1Time, f_d480_vis_y(false, d480_h1Level, d480_h1Type), f_d480_live_x2(d480_h1Time, false), f_d480_vis_y(false, d480_h1Level, d480_h1Type), xloc=xloc.bar_time, extend=extend.none, color=f_d480_col_tf(false, d480_h1Type), width=d480_h1Width, style=line.style_solid)
+        array.push(d480_h1HistLines, d480_h1Line)
+    if d480_keepLabels
+        d480_h1Lbl := label.new(f_d480_make_label_x(d480_h1Time, false), f_d480_vis_y(false, d480_h1Level, d480_h1Type), f_d480_txt("H1", d480_h1Type) + " " + str.tostring(d480_h1Level, format.mintick), xloc=xloc.bar_time, yloc=yloc.price, style=label.style_label_left, color=color.new(f_d480_col_tf(false, d480_h1Type), 25), textcolor=color.white, size=size.small)
+        array.push(d480_h1HistLbls, d480_h1Lbl)
+    f_d480_trim_history(d480_h1HistLines, d480_h1HistLbls, d480_histMaxH1)
+
+if d480_h4RawNew
+    if d480_h4PriorityOverH1
+        f_d480_cut_all(d480_h1HistLines, d480_h1HistLbls, d480_h4RawTime)
+        if not na(d480_h1Line)
+            line.set_x2(d480_h1Line, f_d480_cut_x2(d480_h1Line, d480_h4RawTime))
+            line.set_color(d480_h1Line, color.new(f_d480_col_tf(false, d480_h1Type), d480_oldAlpha))
+            if d480_keepLabels and not na(d480_h1Lbl)
+                label.set_x(d480_h1Lbl, line.get_x2(d480_h1Line))
+                label.set_color(d480_h1Lbl, color.new(f_d480_col_tf(false, d480_h1Type), math.min(d480_oldAlpha + 10, 95)))
+    // cắt toàn bộ H4 cũ ngay tại vị trí line H4 mới
+    f_d480_cut_all(d480_h4HistLines, d480_h4HistLbls, d480_h4RawTime)
+    if not na(d480_h4Line)
+        line.set_x2(d480_h4Line, f_d480_cut_x2(d480_h4Line, d480_h4RawTime))
+        line.set_extend(d480_h4Line, extend.none)
+        line.set_color(d480_h4Line, color.new(f_d480_col_tf(true, d480_h4Type), d480_oldAlpha))
+        if d480_keepLabels and not na(d480_h4Lbl)
+            label.set_x(d480_h4Lbl, line.get_x2(d480_h4Line))
+            label.set_y(d480_h4Lbl, line.get_y2(d480_h4Line))
+            label.set_color(d480_h4Lbl, color.new(f_d480_col_tf(true, d480_h4Type), math.min(d480_oldAlpha + 10, 95)))
+    d480_h4Type := d480_h4RawType
+    d480_h4Level := d480_h4RawLevel
+    d480_h4Time := d480_h4RawTime
+    d480_h4TouchedChain := f_d480_touch_level(d480_h4RawLevel)
+    if d480_showLines
+        d480_h4Line := line.new(d480_h4Time, f_d480_vis_y(true, d480_h4Level, d480_h4Type), f_d480_live_x2(d480_h4Time, true), f_d480_vis_y(true, d480_h4Level, d480_h4Type), xloc=xloc.bar_time, extend=extend.none, color=f_d480_col_tf(true, d480_h4Type), width=d480_h4Width, style=line.style_dashed)
+        array.push(d480_h4HistLines, d480_h4Line)
+    if d480_keepLabels
+        d480_h4Lbl := label.new(f_d480_make_label_x(d480_h4Time, true), f_d480_vis_y(true, d480_h4Level, d480_h4Type), f_d480_txt("H4", d480_h4Type) + " " + str.tostring(d480_h4Level, format.mintick), xloc=xloc.bar_time, yloc=yloc.price, style=label.style_label_left, color=color.new(f_d480_col_tf(true, d480_h4Type), 18), textcolor=color.white, size=size.small)
+        array.push(d480_h4HistLbls, d480_h4Lbl)
+    f_d480_trim_history(d480_h4HistLines, d480_h4HistLbls, d480_histMaxH4)
+
+if d480_on and not na(d480_h1Level) and f_d480_touch_level(d480_h1Level)
+    d480_h1TouchedChain := true
+if d480_on and not na(d480_h4Level) and f_d480_touch_level(d480_h4Level)
+    d480_h4TouchedChain := true
+
+d480_h1Allowed = f_d480_type_enabled(d480_h1Type)
+d480_h4Allowed = f_d480_type_enabled(d480_h4Type)
+d480_h4Visible = d480_on and d480_showH4 and d480_h4Allowed and not na(d480_h4Level)
+d480_h1BlockedByActiveH4 = d480_h4PriorityOverH1 and d480_h4Visible and not na(d480_h4Time) and not na(d480_h1Time) and d480_h4Time >= d480_h1Time
+d480_h1Visible = d480_on and d480_showH1 and d480_h1Allowed and not na(d480_h1Level) and not d480_h1BlockedByActiveH4
+
+if d480_on and d480_showLines and not na(d480_h1Line)
+    line.set_color(d480_h1Line, d480_h1Visible ? f_d480_col_tf(false, d480_h1Type) : color.new(color.gray, 100))
+    line.set_y1(d480_h1Line, f_d480_vis_y(false, d480_h1Level, d480_h1Type))
+    line.set_y2(d480_h1Line, f_d480_vis_y(false, d480_h1Level, d480_h1Type))
+    line.set_width(d480_h1Line, d480_h1Width)
+    line.set_style(d480_h1Line, line.style_solid)
+if d480_on and d480_showLines and not na(d480_h4Line)
+    line.set_color(d480_h4Line, d480_h4Visible ? f_d480_col_tf(true, d480_h4Type) : color.new(color.gray, 100))
+    line.set_y1(d480_h4Line, f_d480_vis_y(true, d480_h4Level, d480_h4Type))
+    line.set_y2(d480_h4Line, f_d480_vis_y(true, d480_h4Level, d480_h4Type))
+    line.set_width(d480_h4Line, d480_h4Width)
+    line.set_style(d480_h4Line, line.style_dashed)
+
+if d480_keepLabels and d480_h1Visible and not na(d480_h1Lbl)
+    label.set_y(d480_h1Lbl, not na(d480_h1Line) ? line.get_y2(d480_h1Line) : f_d480_vis_y(false, d480_h1Level, d480_h1Type))
+    label.set_text(d480_h1Lbl, f_d480_txt("H1", d480_h1Type) + " " + str.tostring(d480_h1Level, format.mintick))
+    label.set_color(d480_h1Lbl, color.new(f_d480_col_tf(false, d480_h1Type), 25))
+    label.set_x(d480_h1Lbl, not na(d480_h1Line) ? line.get_x2(d480_h1Line) : f_d480_make_label_x(d480_h1Time, false))
+if d480_keepLabels and d480_h4Visible and not na(d480_h4Lbl)
+    label.set_y(d480_h4Lbl, not na(d480_h4Line) ? line.get_y2(d480_h4Line) : f_d480_vis_y(true, d480_h4Level, d480_h4Type))
+    label.set_text(d480_h4Lbl, f_d480_txt("H4", d480_h4Type) + " " + str.tostring(d480_h4Level, format.mintick))
+    label.set_color(d480_h4Lbl, color.new(f_d480_col_tf(true, d480_h4Type), 18))
+    label.set_x(d480_h4Lbl, not na(d480_h4Line) ? line.get_x2(d480_h4Line) : f_d480_make_label_x(d480_h4Time, true))
+
+
+//====================================================
+// 5) RES 60 / SUP 60 BOX + SR RES/SUP 200 LINE
+//====================================================
+// RES 60 box = highest(high, 60) zone: [RES - ATR*tolerance, RES]
+// SUP 60 box = lowest(low, 60) zone: [SUP, SUP + ATR*tolerance]
+// SR RES/SUP 200 = highest/lowest 200 line only.
+res60 = ta.highest(high, srFastLen)
+sup60 = ta.lowest(low, srFastLen)
+srRes = ta.highest(high, srOldLen)
+srSup = ta.lowest(low, srOldLen)
+tol = atr * srAtrTol
+zoneTol = atr * zoneNearAtr
+
+res60Top = res60
+res60Bot = res60 - tol
+sup60Top = sup60 + tol
+sup60Bot = sup60
+
+zoneNearSup60 = low <= sup60Top + zoneTol and high >= sup60Bot - zoneTol
+zoneNearRes60 = high >= res60Bot - zoneTol and low <= res60Top + zoneTol
+
+var box res60Box = na
+var box sup60Box = na
+int srLeft60 = math.max(0, bar_index - srFastLen + 1)
+if showResSup60Boxes
+    if na(res60Box)
+        res60Box := box.new(srLeft60, res60Top, bar_index + 1, res60Bot, xloc=xloc.bar_index, bgcolor=color.new(res60BoxColor, srBoxTransp), border_color=color.new(res60BoxColor, 20), text=showResSup60Labels ? 'RES 60' : '', text_color=color.white, text_size=size.tiny, text_halign=text.align_center, text_valign=text.align_center)
+    else
+        box.set_left(res60Box, srLeft60)
+        box.set_right(res60Box, bar_index + 1)
+        box.set_top(res60Box, res60Top)
+        box.set_bottom(res60Box, res60Bot)
+        box.set_bgcolor(res60Box, color.new(res60BoxColor, srBoxTransp))
+        box.set_border_color(res60Box, color.new(res60BoxColor, 20))
+        box.set_text(res60Box, showResSup60Labels ? 'RES 60' : '')
+    if na(sup60Box)
+        sup60Box := box.new(srLeft60, sup60Top, bar_index + 1, sup60Bot, xloc=xloc.bar_index, bgcolor=color.new(sup60BoxColor, srBoxTransp), border_color=color.new(sup60BoxColor, 20), text=showResSup60Labels ? 'SUP 60' : '', text_color=color.white, text_size=size.tiny, text_halign=text.align_center, text_valign=text.align_center)
+    else
+        box.set_left(sup60Box, srLeft60)
+        box.set_right(sup60Box, bar_index + 1)
+        box.set_top(sup60Box, sup60Top)
+        box.set_bottom(sup60Box, sup60Bot)
+        box.set_bgcolor(sup60Box, color.new(sup60BoxColor, srBoxTransp))
+        box.set_border_color(sup60Box, color.new(sup60BoxColor, 20))
+        box.set_text(sup60Box, showResSup60Labels ? 'SUP 60' : '')
+else
+    if not na(res60Box)
+        box.delete(res60Box)
+        res60Box := na
+    if not na(sup60Box)
+        box.delete(sup60Box)
+        sup60Box := na
+
+plot(showSr200Lines ? srRes : na, "SR RES 200", color=color.new(srRes200Color, 0), linewidth=1, style=plot.style_linebr)
+plot(showSr200Lines ? srSup : na, "SR SUP 200", color=color.new(srSup200Color, 0), linewidth=1, style=plot.style_linebr)
+
+//====================================================
+
+//====================================================
+// 6) FVG / IFVG / OB BOX ENGINE — SMC5M D375 + smcPatch FORMULA
+//====================================================
+// Standard SMC5M formulas:
+// - FVG BUY  = 3 candles C1-C2-C3: low > high[2], gap = low - high[2].
+// - FVG SELL = 3 candles C1-C2-C3: high < low[2], gap = low[2] - high.
+// - IFVG BUY = an old bearish FVG is broken upward through its TOP by a body close.
+// - IFVG SELL = an old bullish FVG is broken downward through its BOTTOM by a body close.
+// - OB BUY = close[1] < open[1] and close > high[1] and displacement and (MSS UP or SSL grab).
+// - OB SELL = close[1] > open[1] and close < low[1] and displacement and (MSS DN or BSL grab).
+// - FVG/IFVG: boxes extend forward; if the candle BODY touches/fills/breaks the zone, the box is managed/removed.
+// - OB: wick touches do not delete the box; only a body close through the invalidation edge deletes it.
+
+grpAdvZoneFull = "ADVANCED ZONE ENGINE (FULL)"
+showAdvFVGBoxes = input.bool(true, "Show FVG Boxes — SMC5M D375", group=grpAdvZoneFull)
+showAdvIFVGBoxes = input.bool(true, "Show IFVG Boxes — SMC5M D375", group=grpAdvZoneFull)
+showAdvOBBoxes = input.bool(true, "Show OB Boxes — SMC5M D375", group=grpAdvZoneFull)
+advZoneExtendBars = input.int(15, "Zone Extend Bars", minval=1, maxval=500, group=grpAdvZoneFull)
+useDispFilter = input.bool(false, "Use displacement filter - confluence only", group=grpAdvZoneFull)
+dispATRMult = input.float(0.80, "Displacement range ATR x", step=0.05, minval=0.0, group=grpAdvZoneFull)
+showLiveFVGLine = input.bool(true, "Show Live FVG/IFVG/OB mid line", group=grpAdvZoneFull)
+showLiveFVGLabel = input.bool(true, "Show Live FVG/IFVG/OB label", group=grpAdvZoneFull)
+obRequireSRBand = input.bool(false, "OB Need RES60/SUP60 band - confluence only", group=grpAdvZoneFull)
+maxZones = input.int(30, "Max total zones per side", minval=1, maxval=200, group=grpAdvZoneFull)
+fvgStopTicks = input.int(1, "FVG Stop Entry Ticks", minval=0, maxval=20, group=grpAdvZoneFull)
+fvgSuggestBarsMax = input.int(25, "FVG Suggest Valid Bars", minval=1, maxval=200, group=grpAdvZoneFull)
+fvgSuggestNeedEMA34 = input.bool(true, "FVG Suggest Need EMA34", group=grpAdvZoneFull)
+fvgSuggestNeedWick = input.bool(true, "FVG Suggest Need Wick Support", group=grpAdvZoneFull)
+
+grpD375 = "DAO D375 — SMC5M EXACT FVG / IFVG / OB SYNC"
+d375_on = input.bool(true, "Enable SMC5M-style FVG / IFVG / OB boxes", group=grpD375)
+d375_showFVG = input.bool(true, "MASTER Show FVG boxes", group=grpD375)
+d375_showIFVG = input.bool(true, "MASTER Show IFVG boxes", group=grpD375)
+d375_showOB = input.bool(true, "MASTER Show OB boxes", group=grpD375)
+d375_showLabels = input.bool(true, "Show all OB/IFVG/FVG labels", group=grpD375)
+d375_useBoxTextOnly = input.bool(true, "Use box text only - no duplicate label", group=grpD375)
+d207_showAllBoxes = input.bool(true, "Show all OB/FVG/IFVG boxes", group=grpD375)
+d207_showAllLabels = input.bool(true, "Show all OB/FVG/IFVG labels", group=grpD375)
+d207_showFVGIFVGBoxes = input.bool(true, "Show FVG/IFVG boxes", group=grpD375)
+d207_showOBBoxes = input.bool(true, "Show OB BUY/SELL boxes", group=grpD375)
+
+d375_maxFVGBuy = input.int(2, "FVG BUY count", minval=0, maxval=10, group=grpD375)
+d375_maxFVGSell = input.int(2, "FVG SELL count", minval=0, maxval=10, group=grpD375)
+d375_maxIFVGBuy = input.int(1, "IFVG BUY count", minval=0, maxval=10, group=grpD375)
+d375_maxIFVGSell = input.int(1, "IFVG SELL count", minval=0, maxval=10, group=grpD375)
+d375_maxOBBuy = input.int(1, "OB BUY count", minval=0, maxval=10, group=grpD375)
+d375_maxOBSell = input.int(1, "OB SELL count", minval=0, maxval=10, group=grpD375)
+d375_fvgExtendBars = input.int(3, "D375 FVG/IFVG display bars (strict: only near 3-candle source)", minval=1, maxval=50, group=grpD375)
+d375_obExtendBars = d375_fvgExtendBars
+d375_oldShortBars = input.int(8, "Old boxes short length bars", minval=1, maxval=120, group=grpD375)
+d375_keepOldUnfilledShort = input.bool(true, "Keep old unfilled boxes short", group=grpD375)
+d375_extendActiveNearCurrent = input.bool(false, "Extend active boxes near current/SR (OFF = old boxes stay short like SMC5M)", group=grpD375)
+
+d375_sweepLen = input.int(12, "Sweep lookback", minval=5, maxval=80, group=grpD375)
+d375_recentSweepBars = input.int(8, "Sweep valid bars", minval=1, maxval=30, group=grpD375)
+d375_dispAtr = input.float(0.20, "Displacement body ATR", minval=0.05, maxval=3.0, step=0.05, group=grpD375)
+d375_wickBodyMin = input.float(0.80, "Sweep wick/body min", minval=0.10, maxval=5.0, step=0.05, group=grpD375)
+d375_bodyCloseDelete = input.bool(true, "Delete/flip only by BODY close", group=grpD375)
+d375_obMssLen = input.int(8, "OB MSS lookback", minval=3, maxval=50, group=grpD375)
+d375_useTrendFilterFVG = input.bool(false, "Use trend filter for new FVG - confluence only", group=grpD375)
+d375_obNeedCISD = input.bool(false, "OB requires same-side FVG / CISD", group=grpD375)
+d375_obNeedMSS = input.bool(false, "OB requires MSS break", group=grpD375)
+d375_obNeedDisp = input.bool(false, "OB requires displacement candle - confluence only", group=grpD375)
+d375_prStopOldAtNewZone = input.bool(false, "PR style: stop previous same-family zone at new zone", group=grpD375)
+d375_minGapATR = input.float(0.02, "Min FVG gap ATR", minval=0.0, maxval=2.0, step=0.01, group=grpD375)
+d375_maxGapATR = input.float(1.20, "Max FVG gap ATR - block huge boxes", minval=0.05, maxval=10.0, step=0.05, group=grpD375)
+d375_showIFVGFromOldFVG = input.bool(true, "Show IFVG from FVG box body-close flip only", group=grpD375)
+d375_fvgNeedC2Disp = input.bool(false, "FVG needs C2 displacement candle - optional", group=grpD375)
+d375_looseFVG = input.bool(true, "DAO draw loose 3-candle imbalance like SMC5M", group=grpD375)
+d375_looseTolATR = input.float(0.08, "Loose FVG overlap tolerance ATR", minval=0.0, maxval=1.0, step=0.01, group=grpD375)
+d375_fvgC2BodyATR = input.float(0.20, "FVG C2 body ATR min", minval=0.0, maxval=3.0, step=0.05, group=grpD375)
+d375_fvgC2BodyPct = input.float(0.45, "FVG C2 body/range min", minval=0.0, maxval=1.0, step=0.05, group=grpD375)
+d375_boxWickPadTicks = input.int(0, "Box wick touch padding ticks (0 = exact wick edge like SMC 5M)", minval=0, maxval=80, group=grpD375)
+d375_ifvgBreakTicks = input.int(1, "IFVG break ticks", minval=0, maxval=50, group=grpD375)
+
+d375_fvgBuyBgBase = input.color(color.lime, "STYLE FVG BUY box color", group=grpD375)
+d375_fvgSellBgBase = input.color(color.red, "STYLE FVG SELL box color", group=grpD375)
+d375_ifvgBuyBgBase = input.color(color.aqua, "STYLE IFVG BUY box color", group=grpD375)
+d375_ifvgSellBgBase = input.color(color.orange, "STYLE IFVG SELL box color", group=grpD375)
+d375_obBuyBgBase = input.color(color.yellow, "STYLE OB BUY box color", group=grpD375)
+d375_obSellBgBase = input.color(color.purple, "STYLE OB SELL box color", group=grpD375)
+d375_boxBgTransp = input.int(84, "STYLE Box background transparency", minval=0, maxval=100, group=grpD375)
+d375_boxBorderTransp = input.int(20, "STYLE Box border transparency", minval=0, maxval=100, group=grpD375)
+d375_ifvgBorderTransp = input.int(10, "STYLE IFVG border transparency", minval=0, maxval=100, group=grpD375)
+d375_boxTextColor = input.color(color.white, "STYLE Box text color", group=grpD375)
+d375_showMidLines = input.bool(true, "Show FVG/IFVG/OB mid lines", group=grpD375)
+d375_midLineTransp = input.int(0, "STYLE Mid line transparency", minval=0, maxval=100, group=grpD375)
+d375_prNoOverlap = input.bool(false, "PR style: avoid overlapping same-side zones", group=grpD375)
+
+d806_obUseSplitFilters = input.bool(true, "D806 OB use split LL/HH filters", group=grpD375)
+d806_obMaxDistLLHH_ATR = input.float(0.55, "D806 OB max distance to LL/HH ATR", minval=0.05, maxval=5.0, step=0.05, group=grpD375)
+d806_obExactLLHH_ATR = input.float(0.12, "D806 OB exact LL/HH tolerance ATR", minval=0.0, maxval=2.0, step=0.01, group=grpD375)
+d806_obMinRangeATR = input.float(1.20, "D806 anti-sideway min range ATR", minval=0.0, maxval=10.0, step=0.10, group=grpD375)
+d806_obMinEmaSlopeATR = input.float(0.03, "D806 anti-sideway EMA34 slope ATR", minval=0.0, maxval=1.0, step=0.01, group=grpD375)
+d806_obMinRsiGap = input.float(1.0, "D806 anti-sideway RSI gap", minval=0.0, maxval=20.0, step=0.25, group=grpD375)
+d375_obNeedNearStruct = input.bool(true, "OB BUY near LOW/LL/SSL/Discount; OB SELL near HIGH/HH/BSL/Premium", group=grpD375)
+d806_obBlockOppositeOverlap = input.bool(true, "D806 block BUY/SELL OB overlap", group=grpD375)
+d806_obOppOverlapATR = input.float(0.15, "D806 opposite OB overlap pad ATR", minval=0.0, maxval=2.0, step=0.05, group=grpD375)
+d375_obStrictBreak = input.bool(true, "OB must break previous candle high/low", group=grpD375)
+d375_obFvgConfirm = input.bool(false, "OB optional require same-side FVG confirm", group=grpD375)
+d375_obNearAtrMult = input.float(0.65, "OB Near LOW/HIGH ATR Buffer", minval=0.05, step=0.05, group=grpD375)
+d375_nearCurrentATR = input.float(3.0, "Active near current/SR ATR", minval=0.1, maxval=20.0, step=0.1, group=grpD375)
+d353_liveUnfilledBoxToCurrent = input.bool(false, "D354: Active boxes extends only to current candle", group=grpD375)
+
+// Arrays
+var array<box> d375_fvgBuyBoxes = array.new_box()
+var array<box> d375_fvgSellBoxes = array.new_box()
+var array<box> d375_ifvgBuyBoxes = array.new_box()
+var array<box> d375_ifvgSellBoxes = array.new_box()
+var array<box> d375_obBuyBoxes = array.new_box()
+var array<box> d375_obSellBoxes = array.new_box()
+var array<line> d375_fvgBuyMidLines = array.new_line()
+var array<line> d375_fvgSellMidLines = array.new_line()
+var array<line> d375_ifvgBuyMidLines = array.new_line()
+var array<line> d375_ifvgSellMidLines = array.new_line()
+var array<line> d375_obBuyMidLines = array.new_line()
+var array<line> d375_obSellMidLines = array.new_line()
+
+f_d375_rank_from_newest(_boxes, _idx) =>
+    array.size(_boxes) - _idx
+
+f_d375_body_fill(_top, _bot) =>
+    math.max(open, close) >= _bot and math.min(open, close) <= _top
+
+f_d375_grade(_score) =>
+    _score >= 9 ? "A+" : _score >= 7 ? "A" : _score >= 5 ? "B" : "W"
+
+f_d375_near_current(_top, _bot) =>
+    _mid = (_top + _bot) * 0.5
+    d375_extendActiveNearCurrent and math.abs(close - _mid) <= atr * d375_nearCurrentATR
+
+f_d375_box_right(_left, _top, _bot, _fallbackBars, _rank, _limit) =>
+    // SMC5M sync: only the newest N boxes stay extended; older boxes are shortened to left + oldShortBars.
+    // Do not extend old boxes based on near-current/SR logic, to avoid stale FVG/IFVG zones cluttering the chart.
+    _keepLong = _rank <= _limit
+    _wanted = _keepLong ? (d353_liveUnfilledBoxToCurrent ? bar_index + 1 : bar_index + _fallbackBars) : _left + d375_oldShortBars
+    math.min(math.max(_wanted, math.max(_left + 1, bar_index - 4500)), bar_index + 500)
+
+f_d375_has_overlap(_boxes, _top, _bot) =>
+    bool _hit = false
+    if array.size(_boxes) > 0
+        for _i = 0 to array.size(_boxes) - 1
+            _b = array.get(_boxes, _i)
+            _eTop = math.max(box.get_top(_b), box.get_bottom(_b))
+            _eBot = math.min(box.get_top(_b), box.get_bottom(_b))
+            if math.min(_eTop, _top) >= math.max(_eBot, _bot)
+                _hit := true
+                break
+    _hit
+
+f_d375_stop_last(_boxes) =>
+    if d375_prStopOldAtNewZone and array.size(_boxes) > 0
+        _b = array.get(_boxes, array.size(_boxes) - 1)
+        _safeR = math.min(math.max(box.get_left(_b) + d375_oldShortBars, box.get_left(_b) + 1), bar_index + 500)
+        box.set_right(_b, _safeR)
+    0
+
+f_d375_trim(_boxes, _max) =>
+    while array.size(_boxes) > math.min(_max, maxZones)
+        box.delete(array.shift(_boxes))
+    0
+
+f_d375_strength_score(_dir, _top, _bot, _needDisp, _cisdMssOK) =>
+    _vol = volEma > 0 ? volume / volEma >= 1.20 : false
+    _rsi = _dir == 1 ? rsiBuyOK : rsiSellOK
+    _ema = _dir == 1 ? emaBull : emaBear
+    _disp = _dir == 1 ? close > open and body >= atr * d375_dispAtr and close > high[1] : close < open and body >= atr * d375_dispAtr and close < low[1]
+    (_vol ? 1 : 0) + (_rsi ? 1 : 0) + (_ema ? 1 : 0) + (_needDisp and _disp ? 1 : 0) + (_cisdMssOK ? 1 : 0)
+
+f_d375_strength_txt(_dir, _top, _bot, _base, _needDisp, _cisdMssOK) =>
+    _base + " " + f_d375_grade(f_d375_strength_score(_dir, _top, _bot, _needDisp, _cisdMssOK))
+
+f_d375_push_box(_boxes, _left, _top, _bot, _bg, _bd, _txt, _tc) =>
+    if d207_showAllBoxes and d375_on and not na(_top) and not na(_bot)
+        _hi = math.max(_top, _bot)
+        _lo = math.min(_top, _bot)
+        _dup = d375_prNoOverlap and f_d375_has_overlap(_boxes, _hi, _lo)
+        if not _dup
+            f_d375_stop_last(_boxes)
+            _safeLeft = math.max(bar_index - 4500, _left)
+            _b = box.new(left=_safeLeft, top=_hi, right=bar_index + 1, bottom=_lo, xloc=xloc.bar_index, extend=extend.none, bgcolor=_bg, border_color=_bd, text=d207_showAllLabels and d375_showLabels and d375_useBoxTextOnly and showZoneText ? _txt : "", text_color=_tc, text_size=size.tiny, text_halign=text.align_center, text_valign=text.align_center)
+            array.push(_boxes, _b)
+            f_d375_trim(_boxes, 40)
+    0
+
+f_d375_manage_fvg(_boxes, _dir, _extendBars, _limit) =>
+    // SMC5M FVG/IFVG manage:
+    // - Wick touches DO NOT delete or shrink the box.
+    // - When the candle BODY penetrates the box, shrink the already-filled part based on the body.
+    //   BUY FVG/IFVG: price retraces from above -> move the box TOP down to bodyBot.
+    //   SELL FVG/IFVG: price retraces from below -> move the box BOTTOM up to bodyTop.
+    // - Delete only when the BODY fully fills the zone or closes clearly beyond the invalidation edge.
+    // - The latest N boxes stay extended; older boxes are shortened and are NOT extended again.
+    if array.size(_boxes) > 0
+        _i = array.size(_boxes) - 1
+        while _i >= 0
+            _b = array.get(_boxes, _i)
+            _left = box.get_left(_b)
+            _top = math.max(box.get_top(_b), box.get_bottom(_b))
+            _bot = math.min(box.get_top(_b), box.get_bottom(_b))
+            _oldEnough = bar_index > _left + 1
+            _tooOld = _left < bar_index - 4500
+            _bodyHi = math.max(open, close)
+            _bodyLo = math.min(open, close)
+            _bodyTouchesZone = _oldEnough and _bodyHi >= _bot and _bodyLo <= _top
+            _fullBodyFill = _oldEnough and (_dir == 1 ? _bodyLo <= _bot : _bodyHi >= _top)
+            _closeInvalid = _oldEnough and (_dir == 1 ? close < _bot : close > _top)
+            _delete = _tooOld or (d375_bodyCloseDelete and (_fullBodyFill or _closeInvalid))
+            if _delete
+                box.delete(_b)
+                array.remove(_boxes, _i)
+            else
+                if d375_bodyCloseDelete and _bodyTouchesZone
+                    if _dir == 1 and _bodyLo < _top and _bodyLo > _bot
+                        // BUY zone: body fill moves from TOP downward; keep the unfilled lower part.
+                        box.set_top(_b, _bodyLo)
+                        _top := _bodyLo
+                    if _dir == -1 and _bodyHi > _bot and _bodyHi < _top
+                        // SELL zone: body fill moves from BOTTOM upward; keep the unfilled upper part.
+                        box.set_bottom(_b, _bodyHi)
+                        _bot := _bodyHi
+                _rank = f_d375_rank_from_newest(_boxes, _i)
+                box.set_extend(_b, extend.none)
+                box.set_right(_b, f_d375_box_right(_left, _top, _bot, _extendBars, _rank, _limit))
+            _i -= 1
+    0
+
+f_d375_manage_ob(_boxes, _dir, _extendBars, _limit) =>
+    if array.size(_boxes) > 0
+        _i = array.size(_boxes) - 1
+        while _i >= 0
+            _b = array.get(_boxes, _i)
+            _left = box.get_left(_b)
+            _top = math.max(box.get_top(_b), box.get_bottom(_b))
+            _bot = math.min(box.get_top(_b), box.get_bottom(_b))
+            _tooOld = _left < bar_index - 9990
+            // OB: wick touch/mitigation does not delete the box. Delete only when price closes beyond the invalidation edge.
+            _buyBrokenDown = _dir == 1 and close < _bot
+            _sellBrokenUp = _dir == -1 and close > _top
+            _deleteOB = d375_bodyCloseDelete and (_buyBrokenDown or _sellBrokenUp)
+            if _tooOld or _deleteOB
+                box.delete(_b)
+                array.remove(_boxes, _i)
+            else
+                _rank = f_d375_rank_from_newest(_boxes, _i)
+                box.set_extend(_b, extend.none)
+                box.set_right(_b, f_d375_box_right(_left, _top, _bot, _extendBars, _rank, _limit))
+            _i -= 1
+    0
+
+f_d375_rebuild_mid_lines(_lines, _boxes, _col) =>
+    while array.size(_lines) > 0
+        _lnOld = array.pop(_lines)
+        if not na(_lnOld)
+            line.delete(_lnOld)
+    if d375_showMidLines and showLiveFVGLine and d207_showAllBoxes and array.size(_boxes) > 0
+        for _i = 0 to array.size(_boxes) - 1
+            _b = array.get(_boxes, _i)
+            _top = math.max(box.get_top(_b), box.get_bottom(_b))
+            _bot = math.min(box.get_top(_b), box.get_bottom(_b))
+            _mid = (_top + _bot) * 0.5
+            _x1 = math.max(bar_index - 4500, box.get_left(_b))
+            _x2 = math.min(bar_index + 500, math.max(_x1 + 1, box.get_right(_b)))
+            _ln = line.new(_x1, _mid, _x2, _mid, xloc=xloc.bar_index, extend=extend.none, color=color.new(_col, d375_midLineTransp), style=line.style_dotted, width=1)
+            array.push(_lines, _ln)
+    0
+
+
+// DAO FIX — IFVG FROM OLD FVG BOXES (SMC5M OLD-BOX SYNC)
+// Scan all old FVG boxes still on the chart, similar to the old OB logic:
+// - Wick touches do not flip or delete the zone.
+// - Only a BODY CLOSE through the FVG edge flips it into an IFVG.
+// - A bullish FVG closed below its BOTTOM becomes an IFVG SELL.
+// - A bearish FVG closed above its TOP becomes an IFVG BUY.
+bool d375_oldBullFvgFlipToIfvgSell = false
+bool d375_oldBearFvgFlipToIfvgBuy = false
+float d375_oldFlipIfvgSellTop = na
+float d375_oldFlipIfvgSellBot = na
+float d375_oldFlipIfvgBuyTop = na
+float d375_oldFlipIfvgBuyBot = na
+
+if d375_on and d375_showIFVG and d375_showIFVGFromOldFVG and d207_showFVGIFVGBoxes and array.size(d375_fvgBuyBoxes) > 0
+    _iOldBull = array.size(d375_fvgBuyBoxes) - 1
+    while _iOldBull >= 0
+        _bOldBull = array.get(d375_fvgBuyBoxes, _iOldBull)
+        _leftOldBull = box.get_left(_bOldBull)
+        _topOldBull = math.max(box.get_top(_bOldBull), box.get_bottom(_bOldBull))
+        _botOldBull = math.min(box.get_top(_bOldBull), box.get_bottom(_bOldBull))
+        _oldEnoughBull = bar_index > _leftOldBull + 1
+        _bodyCloseBreakBull = _oldEnoughBull and close < _botOldBull - syminfo.mintick * d375_ifvgBreakTicks
+        if _bodyCloseBreakBull
+            if not d375_oldBullFvgFlipToIfvgSell
+                d375_oldBullFvgFlipToIfvgSell := true
+                d375_oldFlipIfvgSellTop := _topOldBull
+                d375_oldFlipIfvgSellBot := _botOldBull
+            box.delete(_bOldBull)
+            array.remove(d375_fvgBuyBoxes, _iOldBull)
+        _iOldBull -= 1
+
+if d375_on and d375_showIFVG and d375_showIFVGFromOldFVG and d207_showFVGIFVGBoxes and array.size(d375_fvgSellBoxes) > 0
+    _iOldBear = array.size(d375_fvgSellBoxes) - 1
+    while _iOldBear >= 0
+        _bOldBear = array.get(d375_fvgSellBoxes, _iOldBear)
+        _leftOldBear = box.get_left(_bOldBear)
+        _topOldBear = math.max(box.get_top(_bOldBear), box.get_bottom(_bOldBear))
+        _botOldBear = math.min(box.get_top(_bOldBear), box.get_bottom(_bOldBear))
+        _oldEnoughBear = bar_index > _leftOldBear + 1
+        _bodyCloseBreakBear = _oldEnoughBear and close > _topOldBear + syminfo.mintick * d375_ifvgBreakTicks
+        if _bodyCloseBreakBear
+            if not d375_oldBearFvgFlipToIfvgBuy
+                d375_oldBearFvgFlipToIfvgBuy := true
+                d375_oldFlipIfvgBuyTop := _topOldBear
+                d375_oldFlipIfvgBuyBot := _botOldBear
+            box.delete(_bOldBear)
+            array.remove(d375_fvgSellBoxes, _iOldBear)
+        _iOldBear -= 1
+
+// Manage existing boxes before new creation.
+f_d375_manage_fvg(d375_fvgBuyBoxes, 1, d375_fvgExtendBars, d375_maxFVGBuy)
+f_d375_manage_fvg(d375_fvgSellBoxes, -1, d375_fvgExtendBars, d375_maxFVGSell)
+f_d375_manage_fvg(d375_ifvgBuyBoxes, 1, d375_fvgExtendBars, d375_maxIFVGBuy)
+f_d375_manage_fvg(d375_ifvgSellBoxes, -1, d375_fvgExtendBars, d375_maxIFVGSell)
+f_d375_manage_ob(d375_obBuyBoxes, 1, d375_obExtendBars, d375_maxOBBuy)
+f_d375_manage_ob(d375_obSellBoxes, -1, d375_obExtendBars, d375_maxOBSell)
+
+// === smcPatch + D375 calculations ===
+d375_atr = atr
+d375_pad = syminfo.mintick * d375_boxWickPadTicks
+d375_body = body
+d375_upperWick = upWick
+d375_lowerWick = dnWick
+d375_bullDisp = close > open and d375_body >= d375_atr * d375_dispAtr and close > high[1]
+d375_bearDisp = close < open and d375_body >= d375_atr * d375_dispAtr and close < low[1]
+
+d375_sslLevel = ta.lowest(low[1], d375_sweepLen)
+d375_bslLevel = ta.highest(high[1], d375_sweepLen)
+d375_sslSweep = d375_on and low < d375_sslLevel and close > d375_sslLevel and d375_lowerWick >= d375_body * d375_wickBodyMin
+d375_bslSweep = d375_on and high > d375_bslLevel and close < d375_bslLevel and d375_upperWick >= d375_body * d375_wickBodyMin
+d375_barsSSLSweep = ta.barssince(d375_sslSweep)
+d375_barsBSLSweep = ta.barssince(d375_bslSweep)
+d375_recentSSLSweep = not na(d375_barsSSLSweep) and d375_barsSSLSweep >= 0 and d375_barsSSLSweep <= d375_recentSweepBars
+d375_recentBSLSweep = not na(d375_barsBSLSweep) and d375_barsBSLSweep >= 0 and d375_barsBSLSweep <= d375_recentSweepBars
+d375_mssUpRaw = close > ta.highest(high[1], d375_obMssLen)
+d375_mssDnRaw = close < ta.lowest(low[1], d375_obMssLen)
+d375_mssUpOK = d375_obNeedMSS ? d375_mssUpRaw : (mssUp or d375_mssUpRaw)
+d375_mssDnOK = d375_obNeedMSS ? d375_mssDnRaw : (mssDn or d375_mssDnRaw)
+
+// D795 STRICT ICT FVG: 3 candles C1-C2-C3 with TRUE gap only.
+// FVG BUY  = C3 low > C1 high + C2 is bullish displacement.
+// FVG SELL = C3 high < C1 low + C2 is bearish displacement.
+// Huge gaps are blocked by d375_maxGapATR, so no oversized boxes.
+d375_c2Range = math.max(high[1] - low[1], syminfo.mintick)
+d375_c2Body = math.abs(close[1] - open[1])
+d375_c2BullDisp = close[1] > open[1] and d375_c2Body >= d375_atr * d375_fvgC2BodyATR and d375_c2Body / d375_c2Range >= d375_fvgC2BodyPct
+d375_c2BearDisp = close[1] < open[1] and d375_c2Body >= d375_atr * d375_fvgC2BodyATR and d375_c2Body / d375_c2Range >= d375_fvgC2BodyPct
+d375_bullGap = bar_index >= 2 ? low - high[2] : na
+d375_bearGap = bar_index >= 2 ? low[2] - high : na
+
+d375_nearSupForBuy = low <= sup60 + zoneTol or high[2] <= sup60 + zoneTol or math.abs(((low + high[2]) * 0.5) - sup60) <= zoneTol
+d375_nearResForSell = high >= res60 - zoneTol or low[2] >= res60 - zoneTol or math.abs(((low[2] + high) * 0.5) - res60) <= zoneTol
+d375_fvgBuySRok = not zoneNeedResSup60 or d375_nearSupForBuy
+d375_fvgSellSRok = not zoneNeedResSup60 or d375_nearResForSell
+
+// DAO SYNC SMC5M FVG / IFVG
+// Strict SMC5M FVG: BUY = low > high[2], SELL = high < low[2].
+// Draw-all mode: loose imbalance lets small overlap still draw like the SMC5M visual zones.
+// C2 displacement is optional only; default OFF so 3-candle FVG is not blocked.
+d375_fvgTol = d375_atr * d375_looseTolATR
+d375_bullFVGStrict = bar_index >= 2 and low > high[2]
+d375_bearFVGStrict = bar_index >= 2 and high < low[2]
+d375_bullFVGLoose = bar_index >= 2 and d375_looseFVG and low >= high[2] - d375_fvgTol
+d375_bearFVGLoose = bar_index >= 2 and d375_looseFVG and high <= low[2] + d375_fvgTol
+d375_bullGapOK = d375_bullFVGStrict ? d375_bullGap > 0 : d375_bullGap >= -d375_fvgTol
+d375_bearGapOK = d375_bearFVGStrict ? d375_bearGap > 0 : d375_bearGap >= -d375_fvgTol
+d375_bullC2OK = not d375_fvgNeedC2Disp or d375_c2BullDisp
+d375_bearC2OK = not d375_fvgNeedC2Disp or d375_c2BearDisp
+d375_bullFVG = d375_on and d375_showFVG and d207_showFVGIFVGBoxes and (d375_bullFVGStrict or d375_bullFVGLoose) and d375_bullGapOK and d375_bullC2OK and (not d375_useTrendFilterFVG or emaBull) and d375_fvgBuySRok
+d375_bearFVG = d375_on and d375_showFVG and d207_showFVGIFVGBoxes and (d375_bearFVGStrict or d375_bearFVGLoose) and d375_bearGapOK and d375_bearC2OK and (not d375_useTrendFilterFVG or emaBear) and d375_fvgSellSRok
+
+smcPatchBullFvg = d375_bullFVG
+smcPatchBearFvg = d375_bearFVG
+// STRICT true gap edges: do not expand FVG box with wick pad.
+smcPatchBullFvgTop = low
+smcPatchBullFvgBot = high[2]
+smcPatchBearFvgTop = low[2]
+smcPatchBearFvgBot = high
+
+var float smcPatchLastBullFvgTop = na
+var float smcPatchLastBullFvgBot = na
+var float smcPatchLastBearFvgTop = na
+var float smcPatchLastBearFvgBot = na
+if smcPatchBullFvg
+    smcPatchLastBullFvgTop := smcPatchBullFvgTop
+    smcPatchLastBullFvgBot := smcPatchBullFvgBot
+    smcPatchLastBullFvgBot
+if smcPatchBearFvg
+    smcPatchLastBearFvgTop := smcPatchBearFvgTop
+    smcPatchLastBearFvgBot := smcPatchBearFvgBot
+    smcPatchLastBearFvgBot
+
+smcPatchIfvgBreakTicks = d375_ifvgBreakTicks
+// SMC5M IFVG DRAW RULE — SINGLE SOURCE ONLY:
+// IFVG box is created only when an EXISTING FVG BOX is body-close broken in the old-box scanner above.
+// These smcPatch*IFVG booleans are kept only for downstream score/condition compatibility,
+// but they are NOT used as a second IFVG drawing source anymore.
+smcPatchBearishIFVG = false
+smcPatchBullishIFVG = false
+
+smcPatchDisp = close > open ? d375_bullDisp : close < open ? d375_bearDisp : false
+smcPatchBuyGrab = d375_recentSSLSweep or sweepLow
+smcPatchSellGrab = d375_recentBSLSweep or sweepHigh
+smcPatchMssUp = mssUp or d375_mssUpOK
+smcPatchMssDn = mssDn or d375_mssDnOK
+smcPatchBuyPdOK = close <= (srRes + srSup) * 0.5 or close <= res60 - (res60 - sup60) * 0.382 or zoneNearSup60
+smcPatchSellPdOK = close >= (srRes + srSup) * 0.5 or close >= sup60 + (res60 - sup60) * 0.382 or zoneNearRes60
+
+// === SMC5M SOURCE OB CONDITIONS — D806 / D810 / D811 / D823 ===
+// Xóa các filter tự chế của file ngắn; dùng lại điều kiện OB từ SMC5M.
+d375_obStrictWick = input.bool(false, "OB strict sweep wick required", group=grpD375)
+d375_prObBody = math.abs(close - open)
+d375_prObDispMin = d375_atr * d375_dispAtr
+d375_prPrevBody = math.max(math.abs(close[1] - open[1]), syminfo.mintick)
+d375_prPrevRange = math.max(high[1] - low[1], syminfo.mintick)
+d375_prPrevLower = math.min(open[1], close[1]) - low[1]
+d375_prPrevUpper = high[1] - math.max(open[1], close[1])
+
+// 1) BASE OB
+d375_prPrevRedBase = close[1] < open[1]
+d375_prPrevGreenBase = close[1] > open[1]
+d806_obBuyBase = bar_index >= 2 and d375_prPrevRedBase and close > open
+d806_obSellBase = bar_index >= 2 and d375_prPrevGreenBase and close < open
+
+// 2) DISPLACEMENT / BREAK
+d375_prBullDisp = close > open and d375_prObBody >= d375_prObDispMin and (not d375_obStrictBreak or close > high[1])
+d375_prBearDisp = close < open and d375_prObBody >= d375_prObDispMin and (not d375_obStrictBreak or close < low[1])
+
+// 3) WICK / SWEEP
+d375_prPrevRedSweep = d375_prPrevRedBase and d375_prPrevLower >= d375_prPrevBody * d375_wickBodyMin and d375_prPrevLower / d375_prPrevRange >= 0.20
+d375_prPrevGreenSweep = d375_prPrevGreenBase and d375_prPrevUpper >= d375_prPrevBody * d375_wickBodyMin and d375_prPrevUpper / d375_prPrevRange >= 0.20
+d375_prBullDispSweep = d375_prBullDisp and d375_lowerWick >= d375_body * d375_wickBodyMin and (low <= low[1] or low <= ta.lowest(low[1], d375_recentSweepBars))
+d375_prBearDispSweep = d375_prBearDisp and d375_upperWick >= d375_body * d375_wickBodyMin and (high >= high[1] or high >= ta.highest(high[1], d375_recentSweepBars))
+d806_obBuySweepLL = d375_recentSSLSweep or d375_prPrevRedSweep or d375_prBullDispSweep
+d806_obSellSweepHH = d375_recentBSLSweep or d375_prPrevGreenSweep or d375_prBearDispSweep
+d375_prBuySweepOK = not d375_obStrictWick or d806_obBuySweepLL
+d375_prSellSweepOK = not d375_obStrictWick or d806_obSellSweepHH
+
+// 4) FVG CONFIRM
+d375_prBullFvgOK = not d375_obFvgConfirm or bar_index >= 2 and low > high[2]
+d375_prBearFvgOK = not d375_obFvgConfirm or bar_index >= 2 and high < low[2]
+
+// 5) RSI / EMA CONFIRM — OR confidence, not mandatory all-AND.
+d806_obBuyRSI = rsi > rsiEma and (rsi >= 50 or ta.rising(rsiEma, 2))
+d806_obSellRSI = rsi < rsiEma and (rsi <= 50 or ta.falling(rsiEma, 2))
+d806_obBuyEMA = emaBull or close >= ema34
+d806_obSellEMA = emaBear or close <= ema34
+
+// RAW OB: candle + displacement only. Location/sideway/overlap are applied after all split conditions exist.
+d375_prBullishOB = d806_obBuyBase and d375_prBullDisp and d375_prBuySweepOK and d375_prBullFvgOK
+d375_prBearishOB = d806_obSellBase and d375_prBearDisp and d375_prSellSweepOK and d375_prBearFvgOK
+
+// D792 — Dynamic OB strictness by trend.
+d375_trendBull = emaBull or (close >= ema34 and ema34 >= ema34[1])
+d375_trendBear = emaBear or (close <= ema34 and ema34 <= ema34[1])
+d375_obBuyHardMode = d375_trendBear and not d375_trendBull
+d375_obSellHardMode = d375_trendBull and not d375_trendBear
+
+d375_obRangeReady = not na(lastPH) and not na(lastPL) and lastPH > lastPL
+d375_obMid = d375_obRangeReady ? (lastPH + lastPL) * 0.5 : na
+d375_buyObMidPrice = (open[1] + low[1]) * 0.5
+d375_sellObMidPrice = (high[1] + open[1]) * 0.5
+
+// D806 split location engine — OR, not all-AND.
+d806_llRef = d375_obRangeReady ? lastPL : ta.lowest(low[1], d375_sweepLen)
+d806_hhRef = d375_obRangeReady ? lastPH : ta.highest(high[1], d375_sweepLen)
+d806_buyDistLL = math.abs(low[1] - d806_llRef)
+d806_sellDistHH = math.abs(high[1] - d806_hhRef)
+d806_obBuyExactLL = d375_obRangeReady and low[1] <= d806_llRef + d375_atr * d806_obExactLLHH_ATR
+d806_obSellExactHH = d375_obRangeReady and high[1] >= d806_hhRef - d375_atr * d806_obExactLLHH_ATR
+d806_obBuyNearLL = d375_obRangeReady and low[1] <= d806_llRef + d375_atr * d806_obMaxDistLLHH_ATR
+d806_obSellNearHH = d375_obRangeReady and high[1] >= d806_hhRef - d375_atr * d806_obMaxDistLLHH_ATR
+
+d807_obBuyCurrentNearLL = d375_obRangeReady and low <= d806_llRef + d375_atr * d375_obNearAtrMult
+d807_obSellCurrentNearHH = d375_obRangeReady and high >= d806_hhRef - d375_atr * d375_obNearAtrMult
+d807_obBuyLowerHalf_LL_LH = d375_obRangeReady and high < d806_hhRef and close <= d375_obMid
+d807_obSellUpperHalf_HH_HL = d375_obRangeReady and low > d806_llRef and close >= d375_obMid
+d807_obBuyLocFromRef = d807_obBuyCurrentNearLL or d807_obBuyLowerHalf_LL_LH
+d807_obSellLocFromRef = d807_obSellCurrentNearHH or d807_obSellUpperHalf_HH_HL
+
+d806_obBuyContinuationHL = trendState == 1 and close <= d375_obMid
+d806_obSellContinuationLH = trendState == -1 and close >= d375_obMid
+
+d375_buyObNearLow = d806_obBuyExactLL or d806_obBuyNearLL or d806_obBuySweepLL or d806_obBuyContinuationHL or d807_obBuyLocFromRef
+d375_sellObNearHigh = d806_obSellExactHH or d806_obSellNearHH or d806_obSellSweepHH or d806_obSellContinuationLH or d807_obSellLocFromRef
+d375_obBuyLocOK = not d375_obNeedNearStruct or d375_buyObNearLow
+d375_obSellLocOK = not d375_obNeedNearStruct or d375_sellObNearHigh
+
+// D810 — REFERENCE OB CASE.
+d810_refPrevRedSweepLL = d375_obRangeReady and d375_prPrevRedBase and low[1] <= d806_llRef + d375_atr * d375_obNearAtrMult
+d810_refCurGreenSweepLL = d375_obRangeReady and close > open and low <= d806_llRef + d375_atr * d375_obNearAtrMult
+d810_refPrevGreenSweepHH = d375_obRangeReady and d375_prPrevGreenBase and high[1] >= d806_hhRef - d375_atr * d375_obNearAtrMult
+d810_refCurRedSweepHH = d375_obRangeReady and close < open and high >= d806_hhRef - d375_atr * d375_obNearAtrMult
+d810_refBuyBreakConfirm = close > open and d375_prObBody >= d375_atr * 0.20 and close > high[1]
+d810_refSellBreakConfirm = close < open and d375_prObBody >= d375_atr * 0.20 and close < low[1]
+d808_refObBuyCase = d806_obBuyBase and ((d810_refPrevRedSweepLL and d810_refBuyBreakConfirm) or (not d810_refPrevRedSweepLL and d810_refCurGreenSweepLL and d375_prObBody >= d375_atr * 0.20))
+d808_refObSellCase = d806_obSellBase and ((d810_refPrevGreenSweepHH and d810_refSellBreakConfirm) or (not d810_refPrevGreenSweepHH and d810_refCurRedSweepHH and d375_prObBody >= d375_atr * 0.20))
+
+// D811 — HH/LL ENGINE GOM CHUNG CHO REF OB CHAIN CASE.
+grpOB = "Order Block"
+
+d811_hhllLookback = input.int(5, "D811 OB HH/LL chain lookback", minval=2, maxval=20, group=grpOB)
+d811_llOffsetRaw = ta.lowestbars(low, d811_hhllLookback)
+d811_hhOffsetRaw = ta.highestbars(high, d811_hhllLookback)
+d811_llOffset = math.max(d811_llOffsetRaw, 0)
+d811_hhOffset = math.max(d811_hhOffsetRaw, 0)
+d811_hasLL = not na(d811_llOffsetRaw) and d811_llOffsetRaw >= 0
+d811_hasHH = not na(d811_hhOffsetRaw) and d811_hhOffsetRaw >= 0
+d811_llCandleRed = d811_hasLL and d811_llOffset >= 1 and close[d811_llOffset] < open[d811_llOffset]
+d811_hhCandleGreen = d811_hasHH and d811_hhOffset >= 1 and close[d811_hhOffset] > open[d811_hhOffset]
+d811_curGreenConfirm = close > open and d375_prObBody >= d375_atr * 0.20
+d811_curRedConfirm = close < open and d375_prObBody >= d375_atr * 0.20
+d811_buyBreakLLCandle = not d375_obStrictBreak or close > high[d811_llOffset]
+d811_sellBreakHHCandle = not d375_obStrictBreak or close < low[d811_hhOffset]
+d811_obBuyHHLLChain = d811_llCandleRed and d811_curGreenConfirm and d811_buyBreakLLCandle
+d811_obSellHHLLChain = d811_hhCandleGreen and d811_curRedConfirm and d811_sellBreakHHCandle
+
+// D813 — HH/LL + FVG + 2 CONFIRM CANDLES CASE.
+d813_buyTwoGreenAfterOB = close > open and close[1] > open[1]
+d813_sellTwoRedAfterOB = close < open and close[1] < open[1]
+d813_bullFvgInConfirm = smcPatchBullFvg or smcPatchBullFvg[1]
+d813_bearFvgInConfirm = smcPatchBearFvg or smcPatchBearFvg[1]
+d813_llRedBefore2Green = d811_hasLL and d811_llOffset >= 2 and close[d811_llOffset] < open[d811_llOffset]
+d813_hhGreenBefore2Red = d811_hasHH and d811_hhOffset >= 2 and close[d811_hhOffset] > open[d811_hhOffset]
+d812_obBuyLLFvgCase = d813_llRedBefore2Green and d813_buyTwoGreenAfterOB and d813_bullFvgInConfirm
+d812_obSellHHFvgCase = d813_hhGreenBefore2Red and d813_sellTwoRedAfterOB and d813_bearFvgInConfirm
+
+// D823 — PR DAY OB DRAW OR PATCH FOR SMC5M.
+d823_prDayRngOK = d375_obRangeReady
+d823_prDayLLRef = d823_prDayRngOK ? d806_llRef : ta.lowest(low[1], d375_sweepLen)
+d823_prDayHHRef = d823_prDayRngOK ? d806_hhRef : ta.highest(high[1], d375_sweepLen)
+
+d823_prDayRefObBuyOR = bar_index >= 2 and close > open and d375_prObBody >= d375_atr * 0.20 and ((d375_prPrevRedBase and d823_prDayRngOK and low[1] <= d823_prDayLLRef + d375_atr * d375_obNearAtrMult and close > high[1]) or (d375_prPrevRedBase and d823_prDayRngOK and not (low[1] <= d823_prDayLLRef + d375_atr * d375_obNearAtrMult) and low <= d823_prDayLLRef + d375_atr * d375_obNearAtrMult) or (d811_hasLL and d811_llOffset >= 1 and close[d811_llOffset] < open[d811_llOffset] and (not d375_obStrictBreak or close > high[d811_llOffset])) or (d811_hasLL and d811_llOffset >= 2 and close[d811_llOffset] < open[d811_llOffset] and close[1] > open[1] and (smcPatchBullFvg or smcPatchBullFvg[1])))
+d823_prDayRefObSellOR = bar_index >= 2 and close < open and d375_prObBody >= d375_atr * 0.20 and ((d375_prPrevGreenBase and d823_prDayRngOK and high[1] >= d823_prDayHHRef - d375_atr * d375_obNearAtrMult and close < low[1]) or (d375_prPrevGreenBase and d823_prDayRngOK and not (high[1] >= d823_prDayHHRef - d375_atr * d375_obNearAtrMult) and high >= d823_prDayHHRef - d375_atr * d375_obNearAtrMult) or (d811_hasHH and d811_hhOffset >= 1 and close[d811_hhOffset] > open[d811_hhOffset] and (not d375_obStrictBreak or close < low[d811_hhOffset])) or (d811_hasHH and d811_hhOffset >= 2 and close[d811_hhOffset] > open[d811_hhOffset] and close[1] < open[1] and (smcPatchBearFvg or smcPatchBearFvg[1])))
+
+d808_refObBuyCase := d808_refObBuyCase or d811_obBuyHHLLChain or d812_obBuyLLFvgCase or d823_prDayRefObBuyOR
+d808_refObSellCase := d808_refObSellCase or d811_obSellHHLLChain or d812_obSellHHFvgCase or d823_prDayRefObSellOR
+
+// D806 anti-sideway split filters.
+d806_obRangeNow = ta.highest(high, d375_sweepLen) - ta.lowest(low, d375_sweepLen)
+d806_obEmaSlope = math.abs(ema34 - ema34[5])
+d806_obRsiGap = math.abs(rsi - rsiEma)
+d806_obNotSmallRange = d806_obRangeNow >= d375_atr * d806_obMinRangeATR
+d806_obNotFlatEMA = d806_obEmaSlope >= d375_atr * d806_obMinEmaSlopeATR
+d806_obNotFlatRSI = d806_obRsiGap >= d806_obMinRsiGap
+d806_obAllowedMarket = not d806_obUseSplitFilters or d806_obNotSmallRange or d806_obNotFlatEMA or d806_obNotFlatRSI
+
+// D806 opposite-side overlap block.
+d806_obBuyTopPreview = open[1]
+d806_obBuyBotPreview = low[1]
+d806_obSellTopPreview = high[1]
+d806_obSellBotPreview = open[1]
+d806_obBuyOverlapSell = d806_obBlockOppositeOverlap and f_d375_has_overlap(d375_obSellBoxes, math.max(d806_obBuyTopPreview, d806_obBuyBotPreview) + d375_atr * d806_obOppOverlapATR, math.min(d806_obBuyTopPreview, d806_obBuyBotPreview) - d375_atr * d806_obOppOverlapATR)
+d806_obSellOverlapBuy = d806_obBlockOppositeOverlap and f_d375_has_overlap(d375_obBuyBoxes, math.max(d806_obSellTopPreview, d806_obSellBotPreview) + d375_atr * d806_obOppOverlapATR, math.min(d806_obSellTopPreview, d806_obSellBotPreview) - d375_atr * d806_obOppOverlapATR)
+d375_prBullFvgRaw = smcPatchBullFvg
+d375_prBearFvgRaw = smcPatchBearFvg
+d806_obBuyConfirmOR = d806_obBuySweepLL or d375_mssUpRaw or d375_prBullFvgRaw or d806_obBuyRSI or d806_obBuyEMA
+d806_obSellConfirmOR = d806_obSellSweepHH or d375_mssDnRaw or d375_prBearFvgRaw or d806_obSellRSI or d806_obSellEMA
+
+// D802 light flow equivalent in short file.
+d798_rsiBuyTrend = rsi > rsiEma and rsi > rsi[1] and rsiEma > rsiEma[1]
+d798_rsiSellTrend = rsi < rsiEma and rsi < rsi[1] and rsiEma < rsiEma[1]
+d798_buyVolTrend = volume >= volEma * 1.05 and rsi >= rsiEma
+d798_sellVolTrend = volume >= volEma * 1.05 and rsi <= rsiEma
+d798_detailBuyOK = volume >= volEma and rsi > rsi[1] and rsiEma >= rsiEma[1]
+d798_detailSellOK = volume >= volEma and rsi < rsi[1] and rsiEma <= rsiEma[1]
+d798_buyPairOK = d798_buyVolTrend and d798_rsiBuyTrend
+d798_sellPairOK = d798_sellVolTrend and d798_rsiSellTrend
+d798_buyFlowScore = (d798_rsiBuyTrend ? 2 : d798_rsiSellTrend ? -1 : 0) + (d798_buyVolTrend ? 2 : d798_sellVolTrend ? -1 : 0) + (d798_detailBuyOK ? 1 : 0)
+d798_sellFlowScore = (d798_rsiSellTrend ? 2 : d798_rsiBuyTrend ? -1 : 0) + (d798_sellVolTrend ? 2 : d798_buyVolTrend ? -1 : 0) + (d798_detailSellOK ? 1 : 0)
+
+// D823 final SMC5M OB selection.
+d375_obBuyStrictOK = d375_prBullishOB and d375_obBuyLocOK and d806_obAllowedMarket and not d806_obBuyOverlapSell and d806_obBuyConfirmOR and (not d375_obNeedMSS or d375_mssUpRaw) and (not d375_obNeedCISD or d375_prBullFvgRaw or d375_oldBearFvgFlipToIfvgBuy)
+d375_obSellStrictOK = d375_prBearishOB and d375_obSellLocOK and d806_obAllowedMarket and not d806_obSellOverlapBuy and d806_obSellConfirmOR and (not d375_obNeedMSS or d375_mssDnRaw) and (not d375_obNeedCISD or d375_prBearFvgRaw or d375_oldBullFvgFlipToIfvgSell)
+d375_obBuyPRDAY_DRAW_OR = d375_prBullishOB and d375_obBuyLocOK
+d375_obSellPRDAY_DRAW_OR = d375_prBearishOB and d375_obSellLocOK
+d375_obBuyNormalOK = d375_obBuyStrictOK or d375_obBuyPRDAY_DRAW_OR
+d375_obSellNormalOK = d375_obSellStrictOK or d375_obSellPRDAY_DRAW_OR
+
+d375_obBuyHardOK = d375_obBuyNormalOK and d375_recentSSLSweep and d375_mssUpRaw and d375_prBullFvgRaw
+d375_obSellHardOK = d375_obSellNormalOK and d375_recentBSLSweep and d375_prBearDisp and d375_prBearFvgRaw
+
+d375_obBuyBaseOK = d375_obBuyHardMode ? d375_obBuyHardOK : d375_obBuyNormalOK
+d375_obSellBaseOK = d375_obSellHardMode ? d375_obSellHardOK : d375_obSellNormalOK
+
+d375_obBuyPairOK = d375_obBuyBaseOK and d798_buyPairOK
+d375_obSellPairOK = d375_obSellBaseOK and d798_sellPairOK
+
+d375_obBuyDetailOK = d375_obBuyBaseOK and not d375_obBuyPairOK and d798_detailBuyOK
+d375_obSellDetailOK = d375_obSellBaseOK and not d375_obSellPairOK and d798_detailSellOK
+
+d375_obBuyWeakZoneOK = d375_obBuyBaseOK and not d375_obBuyPairOK and not d375_obBuyDetailOK and not d798_sellPairOK and not d798_detailSellOK
+d375_obSellWeakZoneOK = d375_obSellBaseOK and not d375_obSellPairOK and not d375_obSellDetailOK and not d798_buyPairOK and not d798_detailBuyOK
+
+d375_obBuyMainOK = d375_obBuyPairOK or d375_obBuyDetailOK or d375_obBuyWeakZoneOK
+d375_obSellMainOK = d375_obSellPairOK or d375_obSellDetailOK or d375_obSellWeakZoneOK
+d375_obBuyRefOK = d808_refObBuyCase and not d375_obBuyMainOK
+d375_obSellRefOK = d808_refObSellCase and not d375_obSellMainOK
+smcPatchBullOB = d375_on and d375_showOB and d207_showOBBoxes and (d375_obBuyMainOK or d375_obBuyRefOK)
+smcPatchBearOB = d375_on and d375_showOB and d207_showOBBoxes and (d375_obSellMainOK or d375_obSellRefOK)
+
+smcPatchLongZone = smcPatchBullFvg or smcPatchBullishIFVG or smcPatchBullOB
+smcPatchShortZone = smcPatchBearFvg or smcPatchBearishIFVG or smcPatchBearOB
+smcPatchLongCore = smcPatchBuyGrab and smcPatchMssUp and smcPatchBuyPdOK and smcPatchLongZone
+smcPatchShortCore = smcPatchSellGrab and smcPatchMssDn and smcPatchSellPdOK and smcPatchShortZone
+smcPatchLongScore = (smcPatchBuyGrab ? 1 : 0) + (smcPatchMssUp ? 1 : 0) + (smcPatchBuyPdOK ? 1 : 0) + (smcPatchBullFvg or smcPatchBullishIFVG ? 1 : 0) + (smcPatchBullOB ? 1 : 0)
+smcPatchShortScore = (smcPatchSellGrab ? 1 : 0) + (smcPatchMssDn ? 1 : 0) + (smcPatchSellPdOK ? 1 : 0) + (smcPatchBearFvg or smcPatchBearishIFVG ? 1 : 0) + (smcPatchBearOB ? 1 : 0)
+longBiasSMCPatch = smcPatchLongCore and smcPatchLongScore >= 3
+shortBiasSMCPatch = smcPatchShortCore and smcPatchShortScore >= 3
+
+// Backward-compatible aliases used by fibo/entry-zone section.
+bullFVG = smcPatchBullFvg
+bearFVG = smcPatchBearFvg
+ifvgBuy = d375_oldBearFvgFlipToIfvgBuy
+ifvgSell = d375_oldBullFvgFlipToIfvgSell
+obBuy = smcPatchBullOB
+obSell = smcPatchBearOB
+
+// Draw new boxes.
+if smcPatchBullFvg
+    f_d375_push_box(d375_fvgBuyBoxes, bar_index - 2, smcPatchBullFvgTop, smcPatchBullFvgBot, color.new(d375_fvgBuyBgBase, d375_boxBgTransp), color.new(d375_fvgBuyBgBase, d375_boxBorderTransp), f_d375_strength_txt(1, smcPatchBullFvgTop, smcPatchBullFvgBot, "FVG BUY", true, false), d375_boxTextColor)
+if smcPatchBearFvg
+    f_d375_push_box(d375_fvgSellBoxes, bar_index - 2, smcPatchBearFvgTop, smcPatchBearFvgBot, color.new(d375_fvgSellBgBase, d375_boxBgTransp), color.new(d375_fvgSellBgBase, d375_boxBorderTransp), f_d375_strength_txt(-1, smcPatchBearFvgTop, smcPatchBearFvgBot, "FVG SELL", true, false), d375_boxTextColor)
+
+// IFVG drawing uses ONE SOURCE ONLY: old FVG box body-close flip.
+// No second source from smcPatchLastBullFvg / smcPatchLastBearFvg, so IFVG will not duplicate.
+d375_ifvgBuyFromOldOnly = d375_oldBearFvgFlipToIfvgBuy
+d375_ifvgSellFromOldOnly = d375_oldBullFvgFlipToIfvgSell
+
+if d375_ifvgBuyFromOldOnly
+    _ifvgBuyTop = d375_oldFlipIfvgBuyTop
+    _ifvgBuyBot = d375_oldFlipIfvgBuyBot
+    f_d375_push_box(d375_ifvgBuyBoxes, bar_index, _ifvgBuyTop, _ifvgBuyBot, color.new(d375_ifvgBuyBgBase, d375_boxBgTransp), color.new(d375_ifvgBuyBgBase, d375_ifvgBorderTransp), f_d375_strength_txt(1, _ifvgBuyTop, _ifvgBuyBot, "IFVG BUY", true, true), d375_boxTextColor)
+if d375_ifvgSellFromOldOnly
+    _ifvgSellTop = d375_oldFlipIfvgSellTop
+    _ifvgSellBot = d375_oldFlipIfvgSellBot
+    f_d375_push_box(d375_ifvgSellBoxes, bar_index, _ifvgSellTop, _ifvgSellBot, color.new(d375_ifvgSellBgBase, d375_boxBgTransp), color.new(d375_ifvgSellBgBase, d375_ifvgBorderTransp), f_d375_strength_txt(-1, _ifvgSellTop, _ifvgSellBot, "IFVG SELL", true, true), d375_boxTextColor)
+
+if d375_on and d375_showOB and showAdvOBBoxes and d207_showOBBoxes and smcPatchBullOB
+    _buyOff = d375_obBuyRefOK and (d811_obBuyHHLLChain or d812_obBuyLLFvgCase) ? d811_llOffset : 1
+    _obBT = math.max(open[_buyOff], close[_buyOff])
+    _obBB = low[_buyOff]
+    f_d375_push_box(d375_obBuyBoxes, bar_index - _buyOff, _obBT, _obBB, color.new(d375_obBuyBgBase, d375_boxBgTransp), color.new(d375_obBuyBgBase, d375_boxBorderTransp), f_d375_strength_txt(1, _obBT, _obBB, "OB BUY", true, true), d375_boxTextColor)
+if d375_on and d375_showOB and showAdvOBBoxes and d207_showOBBoxes and smcPatchBearOB
+    _sellOff = d375_obSellRefOK and (d811_obSellHHLLChain or d812_obSellHHFvgCase) ? d811_hhOffset : 1
+    _obST = high[_sellOff]
+    _obSB = math.min(open[_sellOff], close[_sellOff])
+    f_d375_push_box(d375_obSellBoxes, bar_index - _sellOff, _obST, _obSB, color.new(d375_obSellBgBase, d375_boxBgTransp), color.new(d375_obSellBgBase, d375_boxBorderTransp), f_d375_strength_txt(-1, _obST, _obSB, "OB SELL", true, true), d375_boxTextColor)
+
+// Rebuild mid lines after boxes are managed/created.
+f_d375_rebuild_mid_lines(d375_fvgBuyMidLines, d375_fvgBuyBoxes, d375_fvgBuyBgBase)
+f_d375_rebuild_mid_lines(d375_fvgSellMidLines, d375_fvgSellBoxes, d375_fvgSellBgBase)
+f_d375_rebuild_mid_lines(d375_ifvgBuyMidLines, d375_ifvgBuyBoxes, d375_ifvgBuyBgBase)
+f_d375_rebuild_mid_lines(d375_ifvgSellMidLines, d375_ifvgSellBoxes, d375_ifvgSellBgBase)
+f_d375_rebuild_mid_lines(d375_obBuyMidLines, d375_obBuyBoxes, d375_obBuyBgBase)
+f_d375_rebuild_mid_lines(d375_obSellMidLines, d375_obSellBoxes, d375_obSellBgBase)
+
+// 8) D568 - PIVOT RETEST LINE BY STRUCTURE
+//====================================================
+f_d568_line_price(_x1, _y1, _x2, _y2, _x) =>
+    _x2 == _x1 ? na : _y1 + (_y2 - _y1) * (_x - _x1) / (_x2 - _x1)
+
+var float d568_lastPL = na
+var int   d568_lastPLBar = na
+var float d568_prevPL = na
+var int   d568_prevPLBar = na
+var float d568_lastPH = na
+var int   d568_lastPHBar = na
+var float d568_prevPH = na
+var int   d568_prevPHBar = na
+
+if not na(pl)
+    d568_prevPL := d568_lastPL
+    d568_prevPLBar := d568_lastPLBar
+    d568_lastPL := pl
+    d568_lastPLBar := bar_index - pivLen
+if not na(ph)
+    d568_prevPH := d568_lastPH
+    d568_prevPHBar := d568_lastPHBar
+    d568_lastPH := ph
+    d568_lastPHBar := bar_index - pivLen
+
+d568_bullLineReady = not na(d568_prevPL) and not na(d568_lastPL) and not na(d568_prevPLBar) and not na(d568_lastPLBar) and d568_prevPLBar < d568_lastPLBar and d568_lastPL > d568_prevPL
+d568_bearLineReady = not na(d568_prevPH) and not na(d568_lastPH) and not na(d568_prevPHBar) and not na(d568_lastPHBar) and d568_prevPHBar < d568_lastPHBar and d568_lastPH < d568_prevPH
+
+d568_bullX2 = d568_bullLineReady ? d568_lastPLBar + (d568_showRecentRetestOnly ? d568_recentRetestBars : d568_extendBars) : na
+d568_bearX2 = d568_bearLineReady ? d568_lastPHBar + (d568_showRecentRetestOnly ? d568_recentRetestBars : d568_extendBars) : na
+d568_bullY2 = d568_bullLineReady ? f_d568_line_price(d568_prevPLBar, d568_prevPL, d568_lastPLBar, d568_lastPL, d568_bullX2) : na
+d568_bearY2 = d568_bearLineReady ? f_d568_line_price(d568_prevPHBar, d568_prevPH, d568_lastPHBar, d568_lastPH, d568_bearX2) : na
+
+var line d568_activeBullLine = na
+var line d568_activeBearLine = na
+var int d568_lastBullStructKey = na
+var int d568_lastBearStructKey = na
+int d568_bullStructKey = d568_bullLineReady ? d568_prevPLBar * 100000 + d568_lastPLBar : na
+int d568_bearStructKey = d568_bearLineReady ? d568_prevPHBar * 100000 + d568_lastPHBar : na
+d568_newBullStructure = d568_bullLineReady and (na(d568_lastBullStructKey) or d568_bullStructKey != d568_lastBullStructKey)
+d568_newBearStructure = d568_bearLineReady and (na(d568_lastBearStructKey) or d568_bearStructKey != d568_lastBearStructKey)
+
+if d568_showRetestLine
+    if d568_newBullStructure
+        d568_lastBullStructKey := d568_bullStructKey
+        line.delete(d568_activeBullLine)
+        d568_activeBullLine := line.new(x1=d568_prevPLBar, y1=d568_prevPL, x2=d568_bullX2, y2=d568_bullY2, xloc=xloc.bar_index, extend=extend.none, color=d568_bullColor, width=d568_width)
+    if d568_newBearStructure
+        d568_lastBearStructKey := d568_bearStructKey
+        line.delete(d568_activeBearLine)
+        d568_activeBearLine := line.new(x1=d568_prevPHBar, y1=d568_prevPH, x2=d568_bearX2, y2=d568_bearY2, xloc=xloc.bar_index, extend=extend.none, color=d568_bearColor, width=d568_width)
+else
+    if not na(d568_activeBullLine)
+        line.delete(d568_activeBullLine)
+        d568_activeBullLine := na
+    if not na(d568_activeBearLine)
+        line.delete(d568_activeBearLine)
+        d568_activeBearLine := na
+
+// Context flags for final condition. No BUY/SELL line/label is drawn here.
+retestBullStructure = d568_bullLineReady and low <= d568_bullY2 + atr * 0.10 and close >= d568_bullY2
+retestBearStructure = d568_bearLineReady and high >= d568_bearY2 - atr * 0.10 and close <= d568_bearY2
+
+//====================================================
+// 9) FIBO BUY / FIBO SELL STRUCTURE ANCHOR
+//====================================================
+var float fibBuyLow = na
+var float fibBuyHigh = na
+var float fibSellHigh = na
+var float fibSellLow = na
+if mssUp or bosUp
+    fibBuyLow := lastPL
+    fibBuyHigh := lastPH
+if mssDn or bosDn
+    fibSellHigh := lastPH
+    fibSellLow := lastPL
+
+buyRange = not na(fibBuyLow) and not na(fibBuyHigh) ? fibBuyHigh - fibBuyLow : na
+sellRange = not na(fibSellHigh) and not na(fibSellLow) ? fibSellHigh - fibSellLow : na
+buyFib50  = not na(buyRange) ? fibBuyHigh - buyRange * 0.500 : na
+buyFib618 = not na(buyRange) ? fibBuyHigh - buyRange * 0.618 : na
+buyFib79  = not na(buyRange) ? fibBuyHigh - buyRange * 0.790 : na
+sellFib382 = not na(sellRange) ? fibSellLow + sellRange * 0.382 : na
+sellFib50  = not na(sellRange) ? fibSellLow + sellRange * 0.500 : na
+sellFib618 = not na(sellRange) ? fibSellLow + sellRange * 0.618 : na
+
+// DAO: Fibo is shown only near potential entry context zones: SUP/RES 60, OB, FVG/IFVG, or BOS/CHoCH/MSS retest.
+fibBuyNearZone = not fibOnlyNearEntryZone or zoneNearSup60 or obBuy or bullFVG or ifvgBuy or retestBullStructure
+fibSellNearZone = not fibOnlyNearEntryZone or zoneNearRes60 or obSell or bearFVG or ifvgSell or retestBearStructure
+
+plot(showFib and fibBuyNearZone ? buyFib50  : na, "FIB BULL 0.5", color=color.new(color.lime, 35), linewidth=1, style=plot.style_linebr)
+plot(showFib and fibBuyNearZone ? buyFib618 : na, "FIB BULL 0.618", color=color.new(color.lime, 0), linewidth=1, style=plot.style_linebr)
+plot(showFib and fibBuyNearZone ? buyFib79  : na, "FIB BULL 0.79", color=color.new(color.lime, 0), linewidth=2, style=plot.style_linebr)
+plot(showFib and fibSellNearZone ? sellFib382 : na, "FIB BEAR 0.382", color=color.new(color.red, 0), linewidth=1, style=plot.style_linebr)
+plot(showFib and fibSellNearZone ? sellFib50  : na, "FIB BEAR 0.5", color=color.new(color.red, 35), linewidth=1, style=plot.style_linebr)
+plot(showFib and fibSellNearZone ? sellFib618 : na, "FIB BEAR 0.618", color=color.new(color.red, 0), linewidth=2, style=plot.style_linebr)
+
+
+//====================================================
+// 10) POC / VAL / VAH / VWAP
+//====================================================
+vpHigh = ta.highest(high, vpLen)
+vpLow = ta.lowest(low, vpLen)
+volSum = math.max(math.sum(volume, vpLen), 1.0)
+poc = math.sum(hlc3 * volume, vpLen) / volSum
+vah = poc + math.max(vpHigh - poc, syminfo.mintick) * 0.35
+val = poc - math.max(poc - vpLow, syminfo.mintick) * 0.35
+vwap = ta.vwap(hlc3)
+plot(showVP ? poc : na, "POC", color=color.new(color.yellow, 0), linewidth=2, style=plot.style_linebr)
+plot(showVP ? vah : na, "VAH", color=color.new(color.red, 0), linewidth=1, style=plot.style_linebr)
+plot(showVP ? val : na, "VAL", color=color.new(color.lime, 0), linewidth=1, style=plot.style_linebr)
+plot(showVP ? vwap : na, "VWAP", color=color.new(color.white, 0), linewidth=2)
+
+//====================================================
+// 11) STOP ENTRY ONLY MODE
+//====================================================
+// Per requirement: use only BUY STOP / SELL STOP near OB zones.
+// Do not draw FINAL BUY / FINAL SELL market/context markers.
+// BUY STOP  = near OB BUY -> above the highest wick.
+// SELL STOP = near OB SELL -> below the lowest wick.
+// FVG/IFVG/FIB remain visual context only, not entry gates.
+
+
+//====================================================
+// D841 — SINGLE ACTIVE WICK TRENDLINE HH→LH / LL→HL
+//====================================================
+// Rules:
+// - Only ONE active line on chart.
+// - Upper wick to upper wick only: HH high → LH high.
+// - Lower wick to lower wick only: LL low → HL low.
+// - If one line already exists, do NOT create another.
+// - Wick touch does not break the line.
+// - Only BODY CLOSE through the line deletes/locks it and allows the next line.
+grpD841 = "D841 - Single Wick Trendline"
+d841_on      = input.bool(true, "Enable single HH→LH / LL→HL wick line", group=grpD841)
+d841_len     = input.int(5, "Pivot length", minval=2, maxval=30, group=grpD841)
+d841_width   = input.int(4, "Line width", minval=1, maxval=6, group=grpD841)
+d841_showLbl = input.bool(true, "Show label", group=grpD841)
+d841_bearCol = input.color(color.new(color.red, 0), "HH→LH upper-wick line", group=grpD841)
+d841_bullCol = input.color(color.new(color.lime, 0), "LL→HL lower-wick line", group=grpD841)
+
+f_d841_y(_x1, _y1, _x2, _y2, _x) =>
+    _x2 == _x1 ? _y2 : _y1 + (_y2 - _y1) * (_x - _x1) / (_x2 - _x1)
+
+var float d841_prevPH = na
+var float d841_lastPH = na
+var int   d841_prevPHBar = na
+var int   d841_lastPHBar = na
+var float d841_prevPL = na
+var float d841_lastPL = na
+var int   d841_prevPLBar = na
+var int   d841_lastPLBar = na
+
+var float d841_lastHH = na
+var int   d841_lastHHBar = na
+var float d841_lastLL = na
+var int   d841_lastLLBar = na
+
+var line  d841_line = na
+var label d841_lbl = na
+var int   d841_dir = 0       // -1 = HH→LH resistance, +1 = LL→HL support
+var float d841_x1 = na
+var float d841_y1 = na
+var float d841_x2 = na
+var float d841_y2 = na
+
+d841_ph = ta.pivothigh(high, d841_len, d841_len)
+d841_pl = ta.pivotlow(low, d841_len, d841_len)
+
+// Upper wick structure: HH high → LH high.
+if d841_on and not na(d841_ph)
+    d841_prevPH := d841_lastPH
+    d841_prevPHBar := d841_lastPHBar
+    d841_lastPH := d841_ph
+    d841_lastPHBar := bar_index - d841_len
+    if not na(d841_prevPH) and d841_lastPH > d841_prevPH
+        d841_lastHH := d841_lastPH
+        d841_lastHHBar := d841_lastPHBar
+    if d841_dir == 0 and not na(d841_prevPH) and d841_lastPH < d841_prevPH and not na(d841_lastHH) and d841_lastPHBar > d841_lastHHBar
+        d841_x1 := d841_lastHHBar
+        d841_y1 := d841_lastHH
+        d841_x2 := d841_lastPHBar
+        d841_y2 := d841_lastPH
+        d841_now = f_d841_y(d841_x1, d841_y1, d841_x2, d841_y2, bar_index)
+        d841_line := line.new(int(d841_x1), d841_y1, bar_index, d841_now, xloc=xloc.bar_index, extend=extend.none, color=d841_bearCol, width=d841_width, style=line.style_solid)
+        d841_dir := -1
+        if d841_showLbl
+            d841_lbl := label.new(bar_index, d841_now, "HH→LH", xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_left, color=d841_bearCol, textcolor=color.white, size=size.small)
+
+// Lower wick structure: LL low → HL low.
+if d841_on and not na(d841_pl)
+    d841_prevPL := d841_lastPL
+    d841_prevPLBar := d841_lastPLBar
+    d841_lastPL := d841_pl
+    d841_lastPLBar := bar_index - d841_len
+    if not na(d841_prevPL) and d841_lastPL < d841_prevPL
+        d841_lastLL := d841_lastPL
+        d841_lastLLBar := d841_lastPLBar
+    if d841_dir == 0 and not na(d841_prevPL) and d841_lastPL > d841_prevPL and not na(d841_lastLL) and d841_lastPLBar > d841_lastLLBar
+        d841_x1 := d841_lastLLBar
+        d841_y1 := d841_lastLL
+        d841_x2 := d841_lastPLBar
+        d841_y2 := d841_lastPL
+        d841_now = f_d841_y(d841_x1, d841_y1, d841_x2, d841_y2, bar_index)
+        d841_line := line.new(int(d841_x1), d841_y1, bar_index, d841_now, xloc=xloc.bar_index, extend=extend.none, color=d841_bullCol, width=d841_width, style=line.style_solid)
+        d841_dir := 1
+        if d841_showLbl
+            d841_lbl := label.new(bar_index, d841_now, "LL→HL", xloc=xloc.bar_index, yloc=yloc.price, style=label.style_label_left, color=d841_bullCol, textcolor=color.black, size=size.small)
+
+// Extend only the single active line. Break only by body close.
+if d841_on and d841_dir != 0 and not na(d841_line)
+    d841_now = f_d841_y(d841_x1, d841_y1, d841_x2, d841_y2, bar_index)
+    line.set_x2(d841_line, bar_index)
+    line.set_y2(d841_line, d841_now)
+    if not na(d841_lbl)
+        label.set_x(d841_lbl, line.get_x2(d841_line))
+        label.set_y(d841_lbl, line.get_y2(d841_line))
+    d841_break = (d841_dir == -1 and bar_index > int(d841_x2) and close > d841_now) or (d841_dir == 1 and bar_index > int(d841_x2) and close < d841_now)
+    if d841_break
+        line.delete(d841_line)
+        d841_line := na
+        if not na(d841_lbl)
+            label.delete(d841_lbl)
+            d841_lbl := na
+        d841_breakY = d841_dir == -1 ? high : low
+        d841_breakTxt = d841_dir == -1 ? "BREAK UP" : "BREAK DN"
+        d841_breakStyle = d841_dir == -1 ? label.style_label_down : label.style_label_up
+        d841_breakColor = d841_dir == -1 ? color.new(color.lime, 0) : color.new(color.red, 0)
+        label.new(bar_index, d841_breakY, d841_breakTxt, xloc=xloc.bar_index, yloc=yloc.price, style=d841_breakStyle, color=d841_breakColor, textcolor=color.white, size=size.small)
+        d841_dir := 0
+        d841_x1 := na
+        d841_y1 := na
+        d841_x2 := na
+        d841_y2 := na
+//====================================================
+

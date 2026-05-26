@@ -1,0 +1,210 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #050910;
+  --color-foreground: #e6eefb;
+  --color-border: #1b293f;
+  --color-primary: #47a9ff;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    margin: 0;
+    background: radial-gradient(circle at 15% 10%, #0f2038 0%, #060b15 40%, #04070e 100%);
+    color: var(--color-foreground);
+    font-family: Inter, "SF Pro Text", "SF Pro Display", system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer utilities {
+  .panel {
+    background: linear-gradient(145deg, rgba(12, 22, 37, 0.82), rgba(8, 15, 28, 0.74));
+    border: 1px solid rgba(122, 161, 214, 0.2);
+    border-radius: 1.15rem;
+    backdrop-filter: blur(14px);
+    box-shadow: 0 18px 48px rgba(0, 8, 20, 0.48), inset 0 1px 0 rgba(170, 205, 255, 0.12);
+  }
+
+  .app-shell {
+    position: relative;
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 1.5rem;
+    padding: 1.25rem;
+  }
+
+  .ambient-backdrop {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(700px 500px at 82% -10%, rgba(49, 150, 255, 0.14), transparent 70%),
+      radial-gradient(620px 470px at 4% 80%, rgba(31, 211, 193, 0.11), transparent 64%);
+    filter: blur(8px);
+    z-index: 0;
+  }
+
+  .app-shell.regime-trending_up .ambient-backdrop,
+  .app-shell.regime-expansion .ambient-backdrop {
+    background:
+      radial-gradient(700px 500px at 82% -10%, rgba(49, 150, 255, 0.18), transparent 70%),
+      radial-gradient(620px 470px at 4% 80%, rgba(31, 211, 193, 0.15), transparent 64%);
+  }
+
+  .app-shell.regime-sideways .ambient-backdrop,
+  .app-shell.regime-compression .ambient-backdrop {
+    background:
+      radial-gradient(700px 500px at 82% -10%, rgba(85, 113, 147, 0.12), transparent 70%),
+      radial-gradient(620px 470px at 4% 80%, rgba(106, 128, 152, 0.10), transparent 64%);
+  }
+
+  .app-shell.regime-high_volatility .ambient-backdrop {
+    background:
+      radial-gradient(700px 500px at 82% -10%, rgba(255, 159, 82, 0.16), transparent 70%),
+      radial-gradient(620px 470px at 4% 80%, rgba(255, 111, 130, 0.15), transparent 64%);
+  }
+
+  .main-stage {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-width: 0;
+  }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 1.8fr 1fr;
+    gap: 1rem;
+  }
+
+  .hero-chart-panel {
+    padding: 1rem;
+  }
+
+  .hero-chart-wrap {
+    height: 610px;
+    border-radius: 0.95rem;
+    overflow: hidden;
+    border: 1px solid rgba(133, 178, 238, 0.16);
+    background: radial-gradient(circle at 50% -20%, rgba(73, 159, 255, 0.1), rgba(3, 9, 20, 0.96));
+  }
+
+  .hero-right-stack {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+  }
+
+  .intel-grid {
+    display: grid;
+    grid-template-columns: 1.25fr 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .panel-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 0.85rem;
+  }
+
+  .panel-kicker {
+    margin: 0;
+    font-size: 0.68rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #87a7d0;
+  }
+
+  .panel-title {
+    margin: 0.2rem 0 0;
+    font-size: 1.18rem;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: #e8f2ff;
+  }
+
+  .price-chip {
+    padding: 0.42rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(70, 168, 255, 0.12);
+    border: 1px solid rgba(89, 181, 255, 0.35);
+    color: #cde9ff;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+
+  .status-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+  }
+
+  .status-dot-live {
+    background: #24d7ad;
+    box-shadow: 0 0 12px rgba(36, 215, 173, 0.7);
+    animation: pulse-soft 1.8s ease-in-out infinite;
+  }
+
+  .status-dot-danger {
+    background: #ff7f8b;
+    box-shadow: 0 0 12px rgba(255, 127, 139, 0.8);
+  }
+
+  .error-banner {
+    padding: 0.72rem 1rem;
+    border-radius: 0.9rem;
+    border: 1px solid rgba(255, 127, 139, 0.45);
+    background: linear-gradient(135deg, rgba(104, 34, 44, 0.56), rgba(58, 20, 26, 0.7));
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: #ffd5d9;
+    font-size: 0.9rem;
+  }
+
+  .loading-stage {
+    min-height: 60vh;
+    display: grid;
+    place-content: center;
+    text-align: center;
+  }
+
+  @keyframes pulse-soft {
+    0% { opacity: 0.7; transform: scale(0.95); }
+    50% { opacity: 1; transform: scale(1.2); }
+    100% { opacity: 0.7; transform: scale(0.95); }
+  }
+
+  @media (max-width: 1279px) {
+    .hero-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .hero-chart-wrap {
+      height: 520px;
+    }
+
+    .intel-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 900px) {
+    .app-shell {
+      grid-template-columns: 1fr;
+      padding: 0.75rem;
+    }
+  }
+}

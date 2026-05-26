@@ -1,0 +1,151 @@
+{
+  "summary": {
+    "runs": 40,
+    "failures": 0,
+    "total_trades": 43,
+    "avg_win_rate": 32.015,
+    "median_profit_factor": 0.0,
+    "avg_sharpe": 0.0105,
+    "avg_max_dd_r": 0.576,
+    "avg_signal_rate_pct": 0.03709849284624992,
+    "avg_conf_pnl_corr": 0.030341446945965755
+  },
+  "by_timeframe": {
+    "15m": {
+      "win_rate": 31.25,
+      "total_pnl_r": 0.1488,
+      "sharpe_ratio": 0.015,
+      "max_drawdown_r": 0.26,
+      "signal_rate_pct": 0.0422,
+      "trades_taken": 0.625
+    },
+    "1d": {
+      "win_rate": 12.5,
+      "total_pnl_r": -0.19,
+      "sharpe_ratio": 0.0,
+      "max_drawdown_r": 0.3775,
+      "signal_rate_pct": 0.0398,
+      "trades_taken": 0.5
+    },
+    "1h": {
+      "win_rate": 53.125,
+      "total_pnl_r": 0.2837,
+      "sharpe_ratio": -0.0388,
+      "max_drawdown_r": 0.6337,
+      "signal_rate_pct": 0.0222,
+      "trades_taken": 1.25
+    },
+    "4h": {
+      "win_rate": 25.0,
+      "total_pnl_r": -0.0725,
+      "sharpe_ratio": 0.035,
+      "max_drawdown_r": 0.6338,
+      "signal_rate_pct": 0.0622,
+      "trades_taken": 1.0
+    },
+    "5m": {
+      "win_rate": 38.2,
+      "total_pnl_r": 0.61,
+      "sharpe_ratio": 0.0412,
+      "max_drawdown_r": 0.975,
+      "signal_rate_pct": 0.019,
+      "trades_taken": 2.0
+    }
+  },
+  "by_asset": {
+    "AAPL": {
+      "win_rate": 70.0,
+      "total_pnl_r": 0.754,
+      "sharpe_ratio": 0.024,
+      "max_drawdown_r": 0.408,
+      "signal_rate_pct": 0.0687,
+      "trades_taken": 1.2
+    },
+    "BTC-USD": {
+      "win_rate": 30.0,
+      "total_pnl_r": 0.226,
+      "sharpe_ratio": 0.022,
+      "max_drawdown_r": 0.644,
+      "signal_rate_pct": 0.0139,
+      "trades_taken": 1.2
+    },
+    "ETH-USD": {
+      "win_rate": 26.12,
+      "total_pnl_r": 0.102,
+      "sharpe_ratio": 0.01,
+      "max_drawdown_r": 1.888,
+      "signal_rate_pct": 0.0278,
+      "trades_taken": 3.2
+    },
+    "EURUSD": {
+      "win_rate": 0.0,
+      "total_pnl_r": 0.0,
+      "sharpe_ratio": 0.0,
+      "max_drawdown_r": 0.0,
+      "signal_rate_pct": 0.0,
+      "trades_taken": 0.0
+    },
+    "NVDA": {
+      "win_rate": 40.0,
+      "total_pnl_r": 0.174,
+      "sharpe_ratio": 0.0,
+      "max_drawdown_r": 0.202,
+      "signal_rate_pct": 0.0345,
+      "trades_taken": 0.6
+    },
+    "QQQ": {
+      "win_rate": 20.0,
+      "total_pnl_r": -0.366,
+      "sharpe_ratio": 0.0,
+      "max_drawdown_r": 0.658,
+      "signal_rate_pct": 0.0431,
+      "trades_taken": 0.8
+    },
+    "SPY": {
+      "win_rate": 40.0,
+      "total_pnl_r": 0.37,
+      "sharpe_ratio": 0.0,
+      "max_drawdown_r": 0.204,
+      "signal_rate_pct": 0.0357,
+      "trades_taken": 0.6
+    },
+    "TSLA": {
+      "win_rate": 30.0,
+      "total_pnl_r": -0.012,
+      "sharpe_ratio": 0.028,
+      "max_drawdown_r": 0.604,
+      "signal_rate_pct": 0.0731,
+      "trades_taken": 1.0
+    }
+  },
+  "regime": {
+    "expansion": {
+      "trades": 17,
+      "win_rate": 58.8235,
+      "expectancy_r": 0.4271
+    },
+    "trending_down": {
+      "trades": 9,
+      "win_rate": 44.4444,
+      "expectancy_r": -0.0667
+    },
+    "trending_up": {
+      "trades": 17,
+      "win_rate": 41.1765,
+      "expectancy_r": -0.0247
+    }
+  },
+  "grade": {
+    "A": {
+      "trades": 21,
+      "win_rate": 57.1429,
+      "expectancy_r": 0.37
+    },
+    "B": {
+      "trades": 22,
+      "win_rate": 40.9091,
+      "expectancy_r": -0.0695
+    }
+  },
+  "failures": []
+}

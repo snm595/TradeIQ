@@ -1,0 +1,347 @@
+{
+  "n_trades": 636,
+  "factor_forensics": {
+    "ema_slope_abs": {
+      "corr_pnl": -0.057215638323084746,
+      "low_q_expectancy": 0.06774193548387096,
+      "high_q_expectancy": -0.10148387096774193,
+      "delta_high_minus_low": -0.1692258064516129,
+      "low_q_win_rate": 40.64516129032258,
+      "high_q_win_rate": 31.61290322580645,
+      "low_q_sharpe_proxy": 0.058701214266870125,
+      "high_q_sharpe_proxy": -0.09642922111479388
+    },
+    "trend_stability": {
+      "corr_pnl": 0.020181641488121026,
+      "low_q_expectancy": -0.1099163179916318,
+      "high_q_expectancy": -0.004239130434782615,
+      "delta_high_minus_low": 0.10567718755684918,
+      "low_q_win_rate": 31.380753138075313,
+      "high_q_win_rate": 36.41304347826087,
+      "low_q_sharpe_proxy": -0.10104921368767515,
+      "high_q_sharpe_proxy": -0.003897382940524197
+    },
+    "atr_ratio": {
+      "corr_pnl": -0.010318751131001225,
+      "low_q_expectancy": -0.15070967741935487,
+      "high_q_expectancy": -0.11445161290322582,
+      "delta_high_minus_low": 0.03625806451612905,
+      "low_q_win_rate": 30.967741935483872,
+      "high_q_win_rate": 30.32258064516129,
+      "low_q_sharpe_proxy": -0.13757787952245704,
+      "high_q_sharpe_proxy": -0.10978327125605113
+    },
+    "breakout_follow_through": {
+      "corr_pnl": 0.14687048279032366,
+      "low_q_expectancy": -0.2735220125786164,
+      "high_q_expectancy": 0.14641025641025637,
+      "delta_high_minus_low": 0.4199322689888728,
+      "low_q_win_rate": 26.41509433962264,
+      "high_q_win_rate": 42.94871794871795,
+      "low_q_sharpe_proxy": -0.261410843769762,
+      "high_q_sharpe_proxy": 0.12944406318383095
+    },
+    "directional_efficiency": {
+      "corr_pnl": 0.06575351734462109,
+      "low_q_expectancy": -0.19361290322580646,
+      "high_q_expectancy": -0.019677419354838743,
+      "delta_high_minus_low": 0.17393548387096772,
+      "low_q_win_rate": 27.09677419354839,
+      "high_q_win_rate": 36.774193548387096,
+      "low_q_sharpe_proxy": -0.19221434177005325,
+      "high_q_sharpe_proxy": -0.01725746765663491
+    },
+    "chop_score": {
+      "corr_pnl": -0.07066900506501972,
+      "low_q_expectancy": 0.0713548387096774,
+      "high_q_expectancy": -0.11922580645161286,
+      "delta_high_minus_low": -0.19058064516129025,
+      "low_q_win_rate": 40.0,
+      "high_q_win_rate": 29.677419354838708,
+      "low_q_sharpe_proxy": 0.0620042243608016,
+      "high_q_sharpe_proxy": -0.11218582948984318
+    }
+  },
+  "filter_audit": {
+    "atr_filter": {
+      "signal_pass_rate": 0.5755478662053056,
+      "trade_pass_rate": 0.789308176100629,
+      "trades_blocked_count": 134,
+      "pass_realized_expectancy": null,
+      "block_realized_expectancy": null,
+      "bad_trades_blocked_proxy": 0,
+      "good_trades_blocked_proxy": 0
+    },
+    "overlap_filter": {
+      "signal_pass_rate": 0.31862745098039214,
+      "trade_pass_rate": 0.33962264150943394,
+      "trades_blocked_count": 420,
+      "pass_realized_expectancy": null,
+      "block_realized_expectancy": null,
+      "bad_trades_blocked_proxy": 0,
+      "good_trades_blocked_proxy": 0
+    },
+    "ema_slope_filter": {
+      "signal_pass_rate": 0.024509803921568627,
+      "trade_pass_rate": 0.08176100628930817,
+      "trades_blocked_count": 584,
+      "pass_realized_expectancy": null,
+      "block_realized_expectancy": null,
+      "bad_trades_blocked_proxy": 0,
+      "good_trades_blocked_proxy": 0
+    },
+    "failed_breakout_filter": {
+      "signal_pass_rate": 0.6205305651672434,
+      "trade_pass_rate": 0.8820754716981132,
+      "trades_blocked_count": 75,
+      "pass_realized_expectancy": null,
+      "block_realized_expectancy": null,
+      "bad_trades_blocked_proxy": 0,
+      "good_trades_blocked_proxy": 0
+    },
+    "volatility_filter": {
+      "signal_pass_rate": 0.8624567474048442,
+      "trade_pass_rate": 0.9952830188679245,
+      "trades_blocked_count": 3,
+      "pass_realized_expectancy": null,
+      "block_realized_expectancy": null,
+      "bad_trades_blocked_proxy": 0,
+      "good_trades_blocked_proxy": 0
+    },
+    "vwap_flat_filter": {
+      "signal_pass_rate": 0.8996539792387543,
+      "trade_pass_rate": 0.9339622641509434,
+      "trades_blocked_count": 42,
+      "pass_realized_expectancy": null,
+      "block_realized_expectancy": null,
+      "bad_trades_blocked_proxy": 0,
+      "good_trades_blocked_proxy": 0
+    }
+  },
+  "edge_localization": [
+    {
+      "asset": "AAPL",
+      "timeframe": "15m",
+      "trades": 5,
+      "expectancy": -0.514,
+      "win_rate": 20.0,
+      "sharpe": -0.46313260771511294
+    },
+    {
+      "asset": "AAPL",
+      "timeframe": "1d",
+      "trades": 3,
+      "expectancy": 0.08000000000000002,
+      "win_rate": 33.33333333333333,
+      "sharpe": 0.06295700570065729
+    },
+    {
+      "asset": "AAPL",
+      "timeframe": "1h",
+      "trades": 17,
+      "expectancy": 0.1552941176470588,
+      "win_rate": 41.17647058823529,
+      "sharpe": 0.1321286547848834
+    },
+    {
+      "asset": "AAPL",
+      "timeframe": "5m",
+      "trades": 21,
+      "expectancy": 0.027619047619047574,
+      "win_rate": 42.857142857142854,
+      "sharpe": 0.02368793656850553
+    },
+    {
+      "asset": "BTC-USD",
+      "timeframe": "15m",
+      "trades": 24,
+      "expectancy": -0.09833333333333337,
+      "win_rate": 33.33333333333333,
+      "sharpe": -0.08647407443158028
+    },
+    {
+      "asset": "BTC-USD",
+      "timeframe": "1d",
+      "trades": 6,
+      "expectancy": 0.37999999999999995,
+      "win_rate": 50.0,
+      "sharpe": 0.3101033563758843
+    },
+    {
+      "asset": "BTC-USD",
+      "timeframe": "1h",
+      "trades": 101,
+      "expectancy": -0.10465346534653468,
+      "win_rate": 30.693069306930692,
+      "sharpe": -0.09852894057806601
+    },
+    {
+      "asset": "BTC-USD",
+      "timeframe": "5m",
+      "trades": 60,
+      "expectancy": -0.20500000000000002,
+      "win_rate": 31.666666666666664,
+      "sharpe": -0.18555046724813845
+    },
+    {
+      "asset": "ETH-USD",
+      "timeframe": "15m",
+      "trades": 25,
+      "expectancy": 0.16839999999999997,
+      "win_rate": 44.0,
+      "sharpe": 0.14184408879046234
+    },
+    {
+      "asset": "ETH-USD",
+      "timeframe": "1d",
+      "trades": 10,
+      "expectancy": 0.4,
+      "win_rate": 50.0,
+      "sharpe": 0.34337891461049685
+    },
+    {
+      "asset": "ETH-USD",
+      "timeframe": "1h",
+      "trades": 100,
+      "expectancy": -0.05960000000000001,
+      "win_rate": 31.0,
+      "sharpe": -0.05701785507694422
+    },
+    {
+      "asset": "ETH-USD",
+      "timeframe": "5m",
+      "trades": 64,
+      "expectancy": -0.14921875,
+      "win_rate": 34.375,
+      "sharpe": -0.12965917177624764
+    },
+    {
+      "asset": "NVDA",
+      "timeframe": "15m",
+      "trades": 8,
+      "expectancy": 0.20749999999999996,
+      "win_rate": 50.0,
+      "sharpe": 0.17366297084784993
+    },
+    {
+      "asset": "NVDA",
+      "timeframe": "1d",
+      "trades": 3,
+      "expectancy": -0.5733333333333334,
+      "win_rate": 0.0,
+      "sharpe": -5.22653927897977
+    },
+    {
+      "asset": "NVDA",
+      "timeframe": "1h",
+      "trades": 16,
+      "expectancy": -0.4075,
+      "win_rate": 18.75,
+      "sharpe": -0.42208154064102127
+    },
+    {
+      "asset": "NVDA",
+      "timeframe": "5m",
+      "trades": 21,
+      "expectancy": 0.08142857142857142,
+      "win_rate": 38.095238095238095,
+      "sharpe": 0.07137743325264341
+    },
+    {
+      "asset": "QQQ",
+      "timeframe": "15m",
+      "trades": 5,
+      "expectancy": -0.952,
+      "win_rate": 0.0,
+      "sharpe": -4.974824659546076
+    },
+    {
+      "asset": "QQQ",
+      "timeframe": "1d",
+      "trades": 3,
+      "expectancy": 0.05333333333333332,
+      "win_rate": 33.33333333333333,
+      "sharpe": 0.04130727880875836
+    },
+    {
+      "asset": "QQQ",
+      "timeframe": "1h",
+      "trades": 21,
+      "expectancy": 0.04999999999999999,
+      "win_rate": 38.095238095238095,
+      "sharpe": 0.04266497375409485
+    },
+    {
+      "asset": "QQQ",
+      "timeframe": "5m",
+      "trades": 25,
+      "expectancy": -0.025600000000000022,
+      "win_rate": 32.0,
+      "sharpe": -0.02468891104534532
+    },
+    {
+      "asset": "SPY",
+      "timeframe": "15m",
+      "trades": 1,
+      "expectancy": 1.44,
+      "win_rate": 100.0,
+      "sharpe": NaN
+    },
+    {
+      "asset": "SPY",
+      "timeframe": "1d",
+      "trades": 2,
+      "expectancy": 0.48,
+      "win_rate": 50.0,
+      "sharpe": 0.33605074749459685
+    },
+    {
+      "asset": "SPY",
+      "timeframe": "1h",
+      "trades": 11,
+      "expectancy": 0.44636363636363635,
+      "win_rate": 54.54545454545454,
+      "sharpe": 0.3758093280683479
+    },
+    {
+      "asset": "SPY",
+      "timeframe": "5m",
+      "trades": 33,
+      "expectancy": -0.02181818181818182,
+      "win_rate": 33.33333333333333,
+      "sharpe": -0.020603631880756108
+    },
+    {
+      "asset": "TSLA",
+      "timeframe": "15m",
+      "trades": 13,
+      "expectancy": 0.3584615384615385,
+      "win_rate": 53.84615384615385,
+      "sharpe": 0.3190900985457091
+    },
+    {
+      "asset": "TSLA",
+      "timeframe": "1d",
+      "trades": 5,
+      "expectancy": 0.054000000000000006,
+      "win_rate": 40.0,
+      "sharpe": 0.040830897188925325
+    },
+    {
+      "asset": "TSLA",
+      "timeframe": "1h",
+      "trades": 15,
+      "expectancy": -0.07666666666666667,
+      "win_rate": 33.33333333333333,
+      "sharpe": -0.06570122338759776
+    },
+    {
+      "asset": "TSLA",
+      "timeframe": "5m",
+      "trades": 18,
+      "expectancy": 0.03166666666666665,
+      "win_rate": 33.33333333333333,
+      "sharpe": 0.029341674458392492
+    }
+  ]
+}

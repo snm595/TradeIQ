@@ -1,0 +1,201 @@
+{
+  "failures": [
+    {
+      "asset": "SPY",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for SPY (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/SPY?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "QQQ",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for QQQ (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/QQQ?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/QQQ?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "AAPL",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for AAPL (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/AAPL?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "TSLA",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for TSLA (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/TSLA?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/TSLA?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "BTC-USD",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for BTC-USD (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "ETH-USD",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for ETH-USD (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/ETH-USD?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/ETH-USD?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "EURUSD",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for EURUSD=X (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/EURUSD=X?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/EURUSD=X?interval=4h&range=5y&includePrePost=false"
+    },
+    {
+      "asset": "NVDA",
+      "timeframe": "4h",
+      "error": "Live market data unavailable for NVDA (4h, 5y). Provider errors: Yahoo query2.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query2.finance.yahoo.com/v8/finance/chart/NVDA?interval=4h&range=5y&includePrePost=false | Yahoo query1.finance.yahoo.com failed: 422 Client Error: Unprocessable Entity for url: https://query1.finance.yahoo.com/v8/finance/chart/NVDA?interval=4h&range=5y&includePrePost=false"
+    }
+  ],
+  "n_trades": 636,
+  "n_signals": 3468,
+  "regime_expectancy": {
+    "low_volatility": {
+      "trades": 3,
+      "win_rate": 0.0,
+      "expectancy_r": -0.8433
+    },
+    "expansion": {
+      "trades": 18,
+      "win_rate": 22.2222,
+      "expectancy_r": -0.32
+    },
+    "high_volatility": {
+      "trades": 90,
+      "win_rate": 27.7778,
+      "expectancy_r": -0.1497
+    },
+    "sideways": {
+      "trades": 519,
+      "win_rate": 36.0308,
+      "expectancy_r": -0.0135
+    },
+    "compression": {
+      "trades": 6,
+      "win_rate": 50.0,
+      "expectancy_r": 0.2167
+    }
+  },
+  "vol_expectancy": {
+    "low_vol": {
+      "trades": 80,
+      "win_rate": 26.25,
+      "expectancy_r": -0.2695
+    },
+    "neutral": {
+      "trades": 172,
+      "win_rate": 36.6279,
+      "expectancy_r": 0.0134
+    },
+    "expanding": {
+      "trades": 368,
+      "win_rate": 34.5109,
+      "expectancy_r": -0.0394
+    }
+  },
+  "trend_strength_expectancy": {
+    "weak": {
+      "trades": 568,
+      "expectancy_r": -0.0397,
+      "win_rate": 35.0352
+    },
+    "medium": {
+      "trades": 52,
+      "expectancy_r": -0.2156,
+      "win_rate": 23.0769
+    },
+    "strong": {
+      "trades": 0,
+      "expectancy_r": NaN,
+      "win_rate": NaN
+    }
+  },
+  "factor_pnl_corr": {
+    "confidence_pct": -0.015875303349605362,
+    "chop_score": -0.07066900506501973,
+    "directional_efficiency": 0.06575351734462108,
+    "breakout_follow_through": 0.14687048279032366,
+    "wick_rejection_rate": 0.11289346930795761,
+    "candle_overlap_pct": 0.06679065464338745,
+    "failed_breakout_count": -0.020388261748688317,
+    "vwap_slope_norm": -0.03167020408492967,
+    "trend_stability": 0.020181641488121026,
+    "ema_slope": -0.018831634803074666,
+    "atr_ratio": -0.010318751131001211,
+    "entry_latency_proxy": -0.03821473888202343
+  },
+  "confidence_bucket_expectancy": {
+    "B_or_below": {
+      "trades": 0,
+      "expectancy_r": NaN,
+      "win_rate": NaN
+    },
+    "A": {
+      "trades": 530,
+      "expectancy_r": -0.018,
+      "win_rate": 35.6604
+    },
+    "A_plus": {
+      "trades": 90,
+      "expectancy_r": -0.1212,
+      "win_rate": 30.0
+    },
+    "super": {
+      "trades": 16,
+      "expectancy_r": -0.4381,
+      "win_rate": 18.75
+    }
+  },
+  "trade_quality_classes": {
+    "trend_exhaustion": {
+      "trades": 301,
+      "expectancy_r": -0.8292,
+      "win_rate": 0.0
+    },
+    "strong_continuation": {
+      "trades": 124,
+      "expectancy_r": 1.4456,
+      "win_rate": 100.0
+    },
+    "mixed_positive": {
+      "trades": 95,
+      "expectancy_r": 1.3907,
+      "win_rate": 100.0
+    },
+    "failed_continuation": {
+      "trades": 44,
+      "expectancy_r": -0.663,
+      "win_rate": 0.0
+    },
+    "breakout_trap": {
+      "trades": 41,
+      "expectancy_r": -0.7917,
+      "win_rate": 0.0
+    },
+    "low_vol_drift": {
+      "trades": 30,
+      "expectancy_r": -0.886,
+      "win_rate": 0.0
+    },
+    "chop_reversion": {
+      "trades": 1,
+      "expectancy_r": -1.06,
+      "win_rate": 0.0
+    }
+  },
+  "mae_mfe": {
+    "avg_mae_8bar": -193.91009897724274,
+    "avg_mfe_8bar": 180.82681151359313,
+    "median_mae_8bar": -9.345916748046875,
+    "median_mfe_8bar": 8.514999389648438
+  },
+  "chop_leakage": {
+    "trade_rate_choppy": 0.16656716417910447,
+    "trade_rate_not_choppy": 0.6610169491525424,
+    "choppy_signals": 3350,
+    "all_signals": 3468
+  },
+  "filter_block_rates_on_signal_bars": {
+    "atr_not_expanding": 0.4244521337946944,
+    "weak_slope": 0.9754901960784313,
+    "high_overlap": 0.6813725490196079,
+    "failed_breakout_high": 0.37946943483275664,
+    "vwap_flat": 0.10034602076124567,
+    "low_efficiency": 0.7107843137254902,
+    "high_wick_rejection": 0.2563437139561707
+  }
+}

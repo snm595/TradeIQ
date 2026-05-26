@@ -1,0 +1,224 @@
+//@version=6
+indicator("AA MCE IND", shorttitle="AA MCE IND", overlay=true)
+
+//====================================================
+// INPUTS
+//====================================================
+
+// HULL
+hmaLen = input.int(20, "Hull Length")
+
+// EMA
+emaFastLen = input.int(5, "Fast EMA")
+emaSlowLen = input.int(7, "Slow EMA")
+
+// CONFIRMATION MODE
+useConfirmed = input.bool(false, "Use Candle Close Confirmation")
+
+// VISUALS
+showEMA   = input.bool(false, "Show EMA")
+showHull  = input.bool(true, "Show Hull")
+paintBars = input.bool(true, "Paint Bars")
+
+// SIGNALS
+showSignals = input.bool(true, "Show BUY/SELL Signals")
+
+//====================================================
+// CUSTOM COLORS
+//====================================================
+
+bullColor    = input.color(color.lime, "Bullish Candle Color")
+bearColor    = input.color(color.red, "Bearish Candle Color")
+neutralColor = input.color(color.rgb(57, 57, 58), "Neutral Candle Color")
+
+hullBullColor = input.color(color.rgb(72, 255, 0), "Hull Bull Color")
+hullBearColor = input.color(color.red, "Hull Bear Color")
+
+//====================================================
+// HULL MA
+//====================================================
+
+hma(src, len) =>
+    ta.wma(
+         2 * ta.wma(src, math.round(len / 2)) -
+         ta.wma(src, len),
+         math.round(math.sqrt(len))
+     )
+
+hull = hma(close, hmaLen)
+
+hullSlope = hull - hull[1]
+
+//====================================================
+// HULL ACCELERATION
+//====================================================
+
+bullAccel =
+     hullSlope > hullSlope[1] and
+     hullSlope > 0
+
+bearAccel =
+     hullSlope < hullSlope[1] and
+     hullSlope < 0
+
+//====================================================
+// EMA
+//====================================================
+
+emaFast = ta.ema(close, emaFastLen)
+emaSlow = ta.ema(close, emaSlowLen)
+
+//====================================================
+// TREND FILTER
+//====================================================
+
+bullTrend =
+     close > hull and
+     emaFast > emaSlow
+
+bearTrend =
+     close < hull and
+     emaFast < emaSlow
+
+//====================================================
+// CONFIRMATION FILTER
+//====================================================
+
+confirmFilter =
+     not useConfirmed or barstate.isconfirmed
+
+//====================================================
+// FINAL CONDITIONS
+//====================================================
+
+bullCondition =
+     bullTrend and
+     bullAccel and
+     confirmFilter
+
+bearCondition =
+     bearTrend and
+     bearAccel and
+     confirmFilter
+
+//====================================================
+// SIGNAL FILTER LOGIC
+//====================================================
+
+//  1  = poslednji signal BUY
+// -1  = poslednji signal SELL
+//  0  = nema signala još
+
+var int lastSignal = 0
+
+// Osnovni signal
+rawBuySignal =
+     bullCondition and
+     not bullCondition[1]
+
+rawSellSignal =
+     bearCondition and
+     not bearCondition[1]
+
+// Finalni signal:
+// BUY se prikazuje samo ako poslednji signal nije BUY
+// SELL se prikazuje samo ako poslednji signal nije SELL
+
+buySignal =
+     rawBuySignal and
+     lastSignal != 1
+
+sellSignal =
+     rawSellSignal and
+     lastSignal != -1
+
+// Update poslednjeg signala
+if buySignal
+    lastSignal := 1
+
+if sellSignal
+    lastSignal := -1
+
+//====================================================
+// TREND COLORS
+//====================================================
+
+trendColor =
+     bullCondition ? bullColor :
+     bearCondition ? bearColor :
+     neutralColor
+
+hullColor =
+     bullCondition ? hullBullColor :
+     bearCondition ? hullBearColor :
+     neutralColor
+
+//====================================================
+// VISUALS
+//====================================================
+
+// BAR COLORS
+barcolor(
+     paintBars
+     ? trendColor
+     : na)
+
+// HULL
+plot(
+     showHull ? hull : na,
+     color = hullColor,
+     linewidth = 3,
+     title = "Hull")
+
+// EMA
+plot(
+     showEMA ? emaFast : na,
+     color = color.orange,
+     linewidth = 2,
+     title = "EMA Fast")
+
+plot(
+     showEMA ? emaSlow : na,
+     color = color.blue,
+     linewidth = 2,
+     title = "EMA Slow")
+
+//====================================================
+// BUY / SELL SIGNALS
+//====================================================
+
+plotshape(
+     showSignals and buySignal,
+     title = "BUY",
+     style = shape.labelup,
+     location = location.belowbar,
+     color = color.lime,
+     text = "BUY",
+     textcolor = color.black,
+     size = size.small)
+
+plotshape(
+     showSignals and sellSignal,
+     title = "SELL",
+     style = shape.labeldown,
+     location = location.abovebar,
+     color = color.red,
+     text = "SELL",
+     textcolor = color.white,
+     size = size.small)
+
+//====================================================
+// ALERTS
+//====================================================
+
+alertcondition(
+     buySignal,
+     title = "BUY Signal",
+     message = "AA MCE IND BUY Signal")
+
+alertcondition(
+     sellSignal,
+     title = "SELL Signal",
+     message = "AA MCE IND SELL Signal")
+
+//====================================================

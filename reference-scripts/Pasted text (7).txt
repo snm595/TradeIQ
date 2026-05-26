@@ -1,0 +1,394 @@
+// -------------------------------------------------
+// Anchored VWAP Risk Ladder [AGPro Series]
+//
+// Author  : AGProLabs | AGPro Series
+// Version : 1.2
+//
+// Anchored VWAP Risk Ladder builds an event-based VWAP from a selected anchor
+// and converts distance from that anchor into a structured risk ladder. It maps
+// AVWAP, deviation bands, reclaim/lose labels, extension context, and a 0-100
+// risk/readiness panel for volume-weighted support and resistance analysis.
+// -------------------------------------------------
+
+//@version=6
+indicator("Anchored VWAP Risk Ladder [AGPro Series]",
+     shorttitle = "AG Pro AVR",
+     overlay = true,
+     max_lines_count = 180,
+     max_labels_count = 180,
+     max_boxes_count = 60)
+
+// -------------------------------------------------
+// Inputs
+// -------------------------------------------------
+G_ANCHOR = "Anchor Engine"
+G_LADDER = "Risk Ladder"
+G_VISUAL = "Visuals"
+G_PANEL = "Panel"
+G_ALERTS = "Alerts"
+
+anchorMode = input.string("High Volume Event", "Anchor Mode",
+     options = ["Manual Time", "High Volume Event", "Swing Pivot", "Session Open", "Week Open", "Month Open"],
+     group = G_ANCHOR,
+     tooltip = "Selects how the anchored VWAP resets. High Volume Event anchors to unusually active participation, while Manual Time allows a user-defined event anchor.")
+manualAnchorTime = input.time(1767225600000, "Manual Anchor Time", group = G_ANCHOR,
+     tooltip = "Manual anchor timestamp. Used only when Anchor Mode is Manual Time.")
+src = input.source(hlc3, "AVWAP Source", group = G_ANCHOR,
+     tooltip = "Price source used for the anchored VWAP calculation.")
+volumeLength = input.int(30, "Relative Volume Length", minval = 5, maxval = 300, group = G_ANCHOR,
+     tooltip = "Lookback used to identify high-volume anchor events and participation quality.")
+anchorVolumeThreshold = input.float(1.80, "High Volume Anchor Threshold", minval = 0.50, step = 0.05, group = G_ANCHOR,
+     tooltip = "Relative volume threshold required to create a new High Volume Event anchor.")
+pivotLength = input.int(5, "Swing Pivot Length", minval = 2, maxval = 30, group = G_ANCHOR,
+     tooltip = "Pivot length used when Anchor Mode is Swing Pivot. The anchor resets when a confirmed swing event appears.")
+minAnchorSpacing = input.int(36, "Minimum Anchor Spacing", minval = 1, maxval = 500, group = G_ANCHOR,
+     tooltip = "Minimum bars between automatic anchors. This prevents frequent anchor resets.")
+
+atrLength = input.int(14, "ATR Length", minval = 1, maxval = 300, group = G_LADDER,
+     tooltip = "ATR length used for risk normalization, labels, invalidation shelves, and extension scoring.")
+devOne = input.float(1.0, "Deviation Band 1", minval = 0.10, step = 0.10, group = G_LADDER,
+     tooltip = "First standard-deviation ladder around anchored VWAP.")
+devTwo = input.float(2.0, "Deviation Band 2", minval = 0.20, step = 0.10, group = G_LADDER,
+     tooltip = "Second standard-deviation ladder around anchored VWAP.")
+reclaimBufferAtr = input.float(0.04, "Reclaim Buffer ATR", minval = 0.0, step = 0.01, group = G_LADDER,
+     tooltip = "Small ATR buffer around anchored VWAP to reduce borderline reclaim and lose signals.")
+extensionRiskAtr = input.float(1.65, "Extension Risk ATR", minval = 0.20, step = 0.05, group = G_LADDER,
+     tooltip = "Distance from AVWAP, measured in ATR, where extension risk starts to matter.")
+minReadyScore = input.int(62, "Minimum Ready Score", minval = 1, maxval = 100, group = G_LADDER,
+     tooltip = "Minimum score required before reclaim or lose conditions receive a READY label.")
+activeWindowBars = input.int(120, "Active Context Window", minval = 10, maxval = 800, group = G_LADDER,
+     tooltip = "Number of bars after a reclaim or lose event where the context remains active.")
+
+showAVWAP = input.bool(true, "Show Anchored VWAP", group = G_VISUAL,
+     tooltip = "Shows the active anchored VWAP rail.")
+showDeviationBands = input.bool(true, "Show Deviation Bands", group = G_VISUAL,
+     tooltip = "Shows volume-weighted deviation bands around anchored VWAP.")
+showRiskLadderFill = input.bool(true, "Show Ladder Fill", group = G_VISUAL,
+     tooltip = "Fills the risk ladder between deviation bands for faster visual reading.")
+showEventLabels = input.bool(true, "Show Event Labels", group = G_VISUAL,
+     tooltip = "Shows anchor, reclaim, lose, and extension labels.")
+showAnchorLabels = input.bool(true, "Show Anchor Labels", group = G_VISUAL,
+     tooltip = "Shows labels when a new anchor is locked.")
+showExtensionLabels = input.bool(false, "Show Extension Risk Labels", group = G_VISUAL,
+     tooltip = "Shows extension risk labels. Disabled by default to keep screenshots clean.")
+showRightTags = input.bool(true, "Show Right-Side Tags", group = G_VISUAL,
+     tooltip = "Shows compact right-side tags for AVWAP and deviation ladder levels.")
+rightTagLaneAtr = input.float(0.18, "Right Tag Lane Spacing ATR", minval = 0.00, maxval = 1.00, step = 0.01, group = G_VISUAL,
+     tooltip = "Adds small ATR-based spacing between right-side tags so AVWAP and deviation labels stay readable when bands are close together.")
+showBarColors = input.bool(false, "Color Bars By State", group = G_VISUAL,
+     tooltip = "Colors bars lightly according to the current AVWAP state.")
+projectionBars = input.int(80, "Projection Bars", minval = 10, maxval = 400, group = G_VISUAL,
+     tooltip = "Number of bars used for right-side tags and projected risk shelves.")
+rightTagOffsetBars = input.int(18, "Right Tag Offset Bars", minval = 2, maxval = 120, group = G_VISUAL,
+     tooltip = "Horizontal distance used for right-side ladder tags. Lower values keep tags closer to current price action.")
+maxEventLabels = input.int(9, "Maximum Event Labels", minval = 2, maxval = 60, group = G_VISUAL,
+     tooltip = "Maximum historical event labels retained on the chart.")
+labelCooldownBars = input.int(20, "Label Cooldown Bars", minval = 1, maxval = 80, group = G_VISUAL,
+     tooltip = "Minimum spacing between repeated labels.")
+labelOffsetAtr = input.float(0.45, "Label Offset ATR", minval = 0.05, step = 0.05, group = G_VISUAL,
+     tooltip = "ATR-based label offset so labels are not buried inside candles.")
+labelSizeInput = input.string("Normal", "Label Font Size", options = ["Tiny", "Small", "Normal", "Large"], group = G_VISUAL,
+     tooltip = "Controls label and right-tag font size.")
+
+showPanel = input.bool(true, "Show Panel", group = G_PANEL,
+     tooltip = "Shows or hides the AG Pro dashboard panel.")
+panelPositionInput = input.string("Top Right", "Panel Location", options = ["Top Right", "Top Left", "Middle Right", "Middle Left", "Bottom Right", "Bottom Left"], group = G_PANEL,
+     tooltip = "Controls dashboard location.")
+panelTheme = input.string("Dark", "Panel Theme", options = ["Dark", "Slate"], group = G_PANEL,
+     tooltip = "Controls dashboard theme.")
+panelFontSizeInput = input.string("Normal", "Panel Font Size", options = ["Tiny", "Small", "Normal", "Large"], group = G_PANEL,
+     tooltip = "Controls dashboard font size.")
+
+alertAnchor = input.bool(true, "Alert: New Anchor", group = G_ALERTS,
+     tooltip = "Enables alerts when a new anchor event is locked.")
+alertReclaim = input.bool(true, "Alert: AVWAP Reclaim", group = G_ALERTS,
+     tooltip = "Enables alerts when price reclaims anchored VWAP with sufficient score.")
+alertLose = input.bool(true, "Alert: AVWAP Lost", group = G_ALERTS,
+     tooltip = "Enables alerts when price loses anchored VWAP with sufficient score.")
+alertExtension = input.bool(false, "Alert: Extension Risk", group = G_ALERTS,
+     tooltip = "Enables alerts when price reaches extension risk distance from anchored VWAP.")
+
+// -------------------------------------------------
+// AGPro Color Palette
+// -------------------------------------------------
+headerBg = color.rgb(37, 99, 235)
+headerText = color.rgb(245, 247, 250)
+panelBg = color.rgb(15, 23, 42)
+panelBorder = color.rgb(51, 65, 85)
+panelLabelCol = color.rgb(148, 163, 184)
+panelValueCol = color.rgb(226, 232, 240)
+bullColor = color.rgb(34, 197, 166)
+bearColor = color.rgb(244, 114, 182)
+neutralColor = color.rgb(245, 189, 92)
+accentColor = color.rgb(129, 140, 248)
+
+// -------------------------------------------------
+// Helpers
+// -------------------------------------------------
+f_clamp(float value, float minValue, float maxValue) =>
+    math.max(minValue, math.min(maxValue, value))
+
+f_score(float value) =>
+    int(math.round(f_clamp(value, 0.0, 100.0)))
+
+f_grade(int score) =>
+    score >= 85 ? "A+" : score >= 75 ? "A" : score >= 65 ? "B" : score >= 50 ? "C" : "D"
+
+f_size(string sizeInput) =>
+    switch sizeInput
+        "Tiny" => size.tiny
+        "Small" => size.small
+        "Large" => size.large
+        => size.normal
+
+f_panel_position(string posInput) =>
+    switch posInput
+        "Top Left" => position.top_left
+        "Middle Right" => position.middle_right
+        "Middle Left" => position.middle_left
+        "Bottom Right" => position.bottom_right
+        "Bottom Left" => position.bottom_left
+        => position.top_right
+
+f_price(float value) =>
+    str.tostring(value, format.mintick)
+
+f_pct(float value) =>
+    str.tostring(math.round(value)) + "%"
+
+f_tag_y(float value, int lane, float atrValue) =>
+    value + math.max(atrValue * rightTagLaneAtr, syminfo.mintick * 20.0) * lane
+
+// -------------------------------------------------
+// Anchor detection
+// -------------------------------------------------
+atr = ta.atr(atrLength)
+volAvg = ta.sma(volume, volumeLength)
+rvol = volAvg > 0.0 ? volume / volAvg : 1.0
+pivotHigh = ta.pivothigh(high, pivotLength, pivotLength)
+pivotLow = ta.pivotlow(low, pivotLength, pivotLength)
+
+var int anchorBar = na
+var string anchorName = "No Anchor"
+var float cumPV = na
+var float cumVol = na
+var float cumPV2 = na
+var int lastSignalBar = na
+var int lastAnchorBar = na
+var int lastLabelBar = na
+var int activeDir = 0
+var int activeSignalBar = na
+
+manualReset = anchorMode == "Manual Time" and time >= manualAnchorTime and (na(time[1]) or time[1] < manualAnchorTime)
+sessionReset = anchorMode == "Session Open" and ta.change(time("D")) != 0
+weekReset = anchorMode == "Week Open" and ta.change(time("W")) != 0
+monthReset = anchorMode == "Month Open" and ta.change(time("M")) != 0
+autoSpacingOk = na(lastAnchorBar) or bar_index - lastAnchorBar >= minAnchorSpacing
+highVolumeReset = anchorMode == "High Volume Event" and autoSpacingOk and rvol >= anchorVolumeThreshold and math.abs(close - open) > atr * 0.35
+swingReset = anchorMode == "Swing Pivot" and autoSpacingOk and (not na(pivotHigh) or not na(pivotLow))
+firstBarReset = na(anchorBar) and barstate.isconfirmed
+newAnchor = firstBarReset or manualReset or sessionReset or weekReset or monthReset or highVolumeReset or swingReset
+
+if newAnchor
+    anchorBar := bar_index
+    lastAnchorBar := bar_index
+    anchorName := firstBarReset ? "Initial Anchor" :
+         manualReset ? "Manual Anchor" :
+         sessionReset ? "Session Anchor" :
+         weekReset ? "Weekly Anchor" :
+         monthReset ? "Monthly Anchor" :
+         highVolumeReset ? "High Volume Anchor" :
+         not na(pivotHigh) ? "Swing High Anchor" : "Swing Low Anchor"
+    cumPV := 0.0
+    cumVol := 0.0
+    cumPV2 := 0.0
+    activeDir := 0
+    activeSignalBar := na
+
+cumPV := nz(cumPV) + src * volume
+cumVol := nz(cumVol) + volume
+cumPV2 := nz(cumPV2) + src * src * volume
+
+avwap = cumVol > 0.0 ? cumPV / cumVol : na
+variance = cumVol > 0.0 ? math.max(cumPV2 / cumVol - avwap * avwap, 0.0) : na
+dev = not na(variance) ? math.sqrt(variance) : na
+upperOne = avwap + dev * devOne
+lowerOne = avwap - dev * devOne
+upperTwo = avwap + dev * devTwo
+lowerTwo = avwap - dev * devTwo
+
+distanceAtr = not na(avwap) and atr > 0.0 ? (close - avwap) / atr : na
+absDistanceAtr = math.abs(nz(distanceAtr))
+distanceDev = not na(dev) and dev > syminfo.mintick ? (close - avwap) / dev : na
+absDistanceDev = math.abs(nz(distanceDev))
+barsFromAnchor = not na(anchorBar) ? bar_index - anchorBar : na
+
+reclaimBuffer = atr * reclaimBufferAtr
+bullReclaim = not na(avwap) and ta.crossover(close, avwap + reclaimBuffer)
+bearLose = not na(avwap) and ta.crossunder(close, avwap - reclaimBuffer)
+extensionRisk = not na(distanceAtr) and absDistanceAtr >= extensionRiskAtr
+
+scoreRaw = not na(avwap) ? 35.0 + f_clamp((1.0 - math.min(absDistanceAtr, extensionRiskAtr) / math.max(extensionRiskAtr, 0.1)) * 25.0, 0.0, 25.0) + f_clamp(rvol * 14.0, 0.0, 22.0) + f_clamp(math.min(float(nz(barsFromAnchor)), 120.0) / 120.0 * 18.0, 0.0, 18.0) : na
+score = not na(scoreRaw) ? f_score(scoreRaw) : na
+readySignal = (bullReclaim or bearLose) and score >= minReadyScore
+
+if readySignal
+    activeDir := bullReclaim ? 1 : -1
+    activeSignalBar := bar_index
+    lastSignalBar := bar_index
+
+activeContext = not na(activeSignalBar) and bar_index - activeSignalBar <= activeWindowBars
+riskScore = not na(distanceAtr) ? f_score(absDistanceAtr / math.max(extensionRiskAtr, 0.1) * 100.0) : na
+ladderState = not na(avwap) ? absDistanceDev < 0.75 ? "Near AVWAP" : absDistanceDev < devOne ? "Band 1" : absDistanceDev < devTwo ? "Band 2" : "Extended" : "n/a"
+anchorText = not na(anchorBar) ? anchorName + "  " + str.tostring(barsFromAnchor) + " bars" : "No Anchor"
+distanceText = not na(distanceAtr) ? str.tostring(distanceAtr, "#.##") + " ATR" : "n/a"
+riskText = not na(riskScore) ? str.tostring(riskScore) + "/100" : "n/a"
+scoreText = not na(score) ? str.tostring(score) + "/100  " + f_grade(score) : "n/a"
+actionState = readySignal or activeContext ? "READY" : extensionRisk ? "MONITOR" : not na(avwap) ? "WAIT" : "BLOCKED"
+directionState = activeContext ? activeDir == 1 ? "Bull Reclaim" : "Bear Lose" : close >= avwap ? "Above AVWAP" : "Below AVWAP"
+
+// -------------------------------------------------
+// Plots and fills
+// -------------------------------------------------
+pAvwap = plot(showAVWAP ? avwap : na, "Anchored VWAP", color = color.new(accentColor, 0), linewidth = 2)
+pUpperOne = plot(showDeviationBands ? upperOne : na, "Upper Band 1", color = color.new(bullColor, 36), linewidth = 1)
+pLowerOne = plot(showDeviationBands ? lowerOne : na, "Lower Band 1", color = color.new(bearColor, 36), linewidth = 1)
+pUpperTwo = plot(showDeviationBands ? upperTwo : na, "Upper Band 2", color = color.new(bullColor, 62), linewidth = 1)
+pLowerTwo = plot(showDeviationBands ? lowerTwo : na, "Lower Band 2", color = color.new(bearColor, 62), linewidth = 1)
+fill(pAvwap, pUpperOne, color = showRiskLadderFill ? color.new(bullColor, 93) : na)
+fill(pAvwap, pLowerOne, color = showRiskLadderFill ? color.new(bearColor, 93) : na)
+fill(pUpperOne, pUpperTwo, color = showRiskLadderFill ? color.new(bullColor, 96) : na)
+fill(pLowerOne, pLowerTwo, color = showRiskLadderFill ? color.new(bearColor, 96) : na)
+
+// -------------------------------------------------
+// Labels
+// -------------------------------------------------
+labelSize = f_size(labelSizeInput)
+labelOffset = atr * labelOffsetAtr
+canLabel = na(lastLabelBar) or bar_index - lastLabelBar >= labelCooldownBars
+var array<label> eventLabels = array.new<label>()
+
+f_push_label(label newLabel) =>
+    array.push(eventLabels, newLabel)
+    if array.size(eventLabels) > maxEventLabels
+        label oldLabel = array.shift(eventLabels)
+        label.delete(oldLabel)
+
+if showEventLabels and showAnchorLabels and canLabel and newAnchor and not firstBarReset
+    label newLabel = label.new(bar_index, high + labelOffset, "ANCHOR | " + anchorName, xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_down, color = accentColor, textcolor = headerText, size = labelSize)
+    f_push_label(newLabel)
+    lastLabelBar := bar_index
+
+if showEventLabels and canLabel and readySignal
+    bool bullEvent = activeDir == 1
+    label newLabel = label.new(bar_index, bullEvent ? low - labelOffset : high + labelOffset, bullEvent ? "READY RECLAIM | Q " + str.tostring(score) : "READY LOSE | Q " + str.tostring(score), xloc = xloc.bar_index, yloc = yloc.price, style = bullEvent ? label.style_label_up : label.style_label_down, color = bullEvent ? bullColor : bearColor, textcolor = headerText, size = labelSize)
+    f_push_label(newLabel)
+    lastLabelBar := bar_index
+
+if showEventLabels and showExtensionLabels and canLabel and extensionRisk and not readySignal
+    bool above = close > avwap
+    label newLabel = label.new(bar_index, above ? high + labelOffset : low - labelOffset, "EXTENSION RISK | " + str.tostring(absDistanceAtr, "#.##") + " ATR", xloc = xloc.bar_index, yloc = yloc.price, style = above ? label.style_label_down : label.style_label_up, color = neutralColor, textcolor = headerText, size = labelSize)
+    f_push_label(newLabel)
+    lastLabelBar := bar_index
+
+// -------------------------------------------------
+// Right-side tags
+// -------------------------------------------------
+rightEdge = bar_index + rightTagOffsetBars
+var label avwapTag = na
+var label upperOneTag = na
+var label lowerOneTag = na
+var label upperTwoTag = na
+var label lowerTwoTag = na
+
+f_update_tag(label tag, float y, string txt, color bg) =>
+    label result = tag
+    if na(result)
+        result := label.new(rightEdge, y, txt, xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left, color = bg, textcolor = headerText, size = labelSize)
+    else
+        label.set_x(result, rightEdge)
+        label.set_y(result, y)
+        label.set_text(result, txt)
+        label.set_color(result, bg)
+        label.set_textcolor(result, headerText)
+        label.set_size(result, labelSize)
+    result
+
+if showRightTags and not na(avwap)
+    avwapTag := f_update_tag(avwapTag, avwap, "AVWAP  " + f_price(avwap), accentColor)
+    if showDeviationBands
+        upperOneTag := f_update_tag(upperOneTag, f_tag_y(upperOne, 1, atr), "+1D  " + f_price(upperOne), bullColor)
+        lowerOneTag := f_update_tag(lowerOneTag, f_tag_y(lowerOne, -1, atr), "-1D  " + f_price(lowerOne), bearColor)
+        upperTwoTag := f_update_tag(upperTwoTag, f_tag_y(upperTwo, 2, atr), "+2D  " + f_price(upperTwo), color.new(bullColor, 8))
+        lowerTwoTag := f_update_tag(lowerTwoTag, f_tag_y(lowerTwo, -2, atr), "-2D  " + f_price(lowerTwo), color.new(bearColor, 8))
+    else
+        if not na(upperOneTag)
+            label.delete(upperOneTag)
+            upperOneTag := na
+        if not na(lowerOneTag)
+            label.delete(lowerOneTag)
+            lowerOneTag := na
+        if not na(upperTwoTag)
+            label.delete(upperTwoTag)
+            upperTwoTag := na
+        if not na(lowerTwoTag)
+            label.delete(lowerTwoTag)
+            lowerTwoTag := na
+else
+    if not na(avwapTag)
+        label.delete(avwapTag)
+        avwapTag := na
+    if not na(upperOneTag)
+        label.delete(upperOneTag)
+        upperOneTag := na
+    if not na(lowerOneTag)
+        label.delete(lowerOneTag)
+        lowerOneTag := na
+    if not na(upperTwoTag)
+        label.delete(upperTwoTag)
+        upperTwoTag := na
+    if not na(lowerTwoTag)
+        label.delete(lowerTwoTag)
+        lowerTwoTag := na
+
+// -------------------------------------------------
+// Panel
+// -------------------------------------------------
+panelPos = f_panel_position(panelPositionInput)
+panelSize = f_size(panelFontSizeInput)
+panelLeftFinal = panelTheme == "Dark" ? color.rgb(51, 65, 85) : color.rgb(71, 85, 105)
+panelBgFinal = panelTheme == "Dark" ? panelBg : color.rgb(30, 41, 59)
+actionColor = actionState == "READY" ? bullColor : actionState == "MONITOR" ? accentColor : actionState == "BLOCKED" ? panelBorder : neutralColor
+directionColor = directionState == "Bull Reclaim" or directionState == "Above AVWAP" ? bullColor : directionState == "Bear Lose" or directionState == "Below AVWAP" ? bearColor : neutralColor
+
+var table panel = table.new(panelPos, 2, 6, border_width = 1, border_color = panelBorder)
+
+if barstate.islast
+    if showPanel
+        table.clear(panel, 0, 0, 1, 5)
+        table.merge_cells(panel, 0, 0, 1, 0)
+        table.cell(panel, 0, 0, "AG Pro Anchored VWAP Risk Ladder", text_color = headerText, bgcolor = headerBg, text_size = panelSize)
+        table.cell(panel, 0, 1, "Anchor", text_color = panelLabelCol, bgcolor = panelLeftFinal, text_size = panelSize)
+        table.cell(panel, 1, 1, anchorText, text_color = panelValueCol, bgcolor = panelBgFinal, text_size = panelSize)
+        table.cell(panel, 0, 2, "Distance", text_color = panelLabelCol, bgcolor = panelLeftFinal, text_size = panelSize)
+        table.cell(panel, 1, 2, distanceText, text_color = panelValueCol, bgcolor = panelBgFinal, text_size = panelSize)
+        table.cell(panel, 0, 3, "Risk Ladder", text_color = panelLabelCol, bgcolor = panelLeftFinal, text_size = panelSize)
+        table.cell(panel, 1, 3, ladderState + "  " + riskText, text_color = panelValueCol, bgcolor = panelBgFinal, text_size = panelSize)
+        table.cell(panel, 0, 4, "Score", text_color = panelLabelCol, bgcolor = panelLeftFinal, text_size = panelSize)
+        table.cell(panel, 1, 4, scoreText + "  " + directionState, text_color = headerText, bgcolor = directionColor, text_size = panelSize)
+        table.cell(panel, 0, 5, "Action", text_color = panelLabelCol, bgcolor = panelLeftFinal, text_size = panelSize)
+        table.cell(panel, 1, 5, actionState, text_color = headerText, bgcolor = actionColor, text_size = panelSize)
+    else
+        table.clear(panel, 0, 0, 1, 5)
+
+barStateColor = actionState == "READY" ? color.new(directionColor, 70) : actionState == "MONITOR" ? color.new(accentColor, 78) : na
+barcolor(showBarColors ? barStateColor : na)
+
+// -------------------------------------------------
+// Alerts
+// -------------------------------------------------
+alertcondition(alertAnchor and newAnchor and not firstBarReset, "AG Pro AVR | NEW ANCHOR LOCKED", "AG Pro AVR: A new anchored VWAP event has been locked.")
+alertcondition(alertReclaim and readySignal and activeDir == 1, "AG Pro AVR | AVWAP RECLAIM READY", "AG Pro AVR: Price reclaimed anchored VWAP with sufficient score.")
+alertcondition(alertLose and readySignal and activeDir == -1, "AG Pro AVR | AVWAP LOST READY", "AG Pro AVR: Price lost anchored VWAP with sufficient score.")
+alertcondition(alertExtension and extensionRisk, "AG Pro AVR | EXTENSION RISK", "AG Pro AVR: Price reached extension risk distance from anchored VWAP.")
+
