@@ -1,4 +1,4 @@
-import { CheckCircle2, XCircle, AlertCircle, TrendingUp, TrendingDown } from 'lucide-react';
+import { CheckCircle2, AlertCircle, TrendingUp, TrendingDown } from 'lucide-react';
 import { clsx } from 'clsx';
 import { buildReferenceChecklist, referenceSummary } from '../utils/referenceLanguage';
 

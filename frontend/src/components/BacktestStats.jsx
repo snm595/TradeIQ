@@ -1,21 +1,21 @@
 import { BarChart3, TrendingUp, AlertTriangle, Target, Activity, ShieldCheck } from 'lucide-react';
 
+const StatCard = ({ title, value, sub, icon: Icon, colorClass }) => (
+  <div className="bg-slate-900/45 border border-slate-700/70 p-4 rounded-xl flex flex-col relative overflow-hidden group transition-transform duration-300 hover:-translate-y-1">
+    <div className={`absolute -right-4 -top-4 w-16 h-16 rounded-full opacity-10 blur-xl ${colorClass} group-hover:opacity-20 transition-opacity`} />
+    <div className="flex items-center gap-2 mb-3 text-muted-foreground">
+      <Icon className="w-4 h-4" />
+      <span className="text-sm font-medium">{title}</span>
+    </div>
+    <div className="flex items-end gap-2 mt-auto">
+      <span className="text-2xl font-bold tracking-tight text-foreground">{value}</span>
+      {sub && <span className="text-sm text-muted-foreground mb-1">{sub}</span>}
+    </div>
+  </div>
+);
+
 export default function BacktestStats({ metrics }) {
   if (!metrics) return null;
-
-  const StatCard = ({ title, value, sub, icon: Icon, colorClass }) => (
-    <div className="bg-slate-900/45 border border-slate-700/70 p-4 rounded-xl flex flex-col relative overflow-hidden group transition-transform duration-300 hover:-translate-y-1">
-      <div className={`absolute -right-4 -top-4 w-16 h-16 rounded-full opacity-10 blur-xl ${colorClass} group-hover:opacity-20 transition-opacity`} />
-      <div className="flex items-center gap-2 mb-3 text-muted-foreground">
-        <Icon className="w-4 h-4" />
-        <span className="text-sm font-medium">{title}</span>
-      </div>
-      <div className="flex items-end gap-2 mt-auto">
-        <span className="text-2xl font-bold tracking-tight text-foreground">{value}</span>
-        {sub && <span className="text-sm text-muted-foreground mb-1">{sub}</span>}
-      </div>
-    </div>
-  );
 
   const winRateColor = metrics.win_rate > 50 ? 'bg-green-500' : metrics.win_rate < 40 ? 'bg-red-500' : 'bg-amber-500';
   const pfColor = metrics.profit_factor > 1.5 ? 'bg-green-500' : metrics.profit_factor < 1.0 ? 'bg-red-500' : 'bg-amber-500';

@@ -2,13 +2,17 @@ import axios from 'axios';
 
 const API_BASE_URL = 'http://localhost:8000/api';
 
-export const analyzeSymbol = async (ticker, timeframe, period) => {
+export const analyzeSymbol = async (ticker, timeframe, period, options = {}) => {
   try {
     const response = await axios.get(`${API_BASE_URL}/analyze`, {
-      params: { ticker, timeframe, period }
+      params: { ticker, timeframe, period },
+      signal: options.signal
     });
     return response.data;
   } catch (error) {
+    if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
+      throw error;
+    }
     console.error('Error analyzing symbol:', error);
     throw error;
   }

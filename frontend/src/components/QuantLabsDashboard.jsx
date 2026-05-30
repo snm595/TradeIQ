@@ -1,17 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { 
   LineChart, 
   Activity, 
   ShieldAlert, 
-  Percent, 
   Sparkles, 
-  TrendingUp, 
   FileText, 
   RefreshCw, 
   Check, 
   BrainCircuit, 
-  Gauge, 
   Database,
   BarChart3
 } from 'lucide-react';
@@ -36,12 +33,7 @@ export default function QuantLabsDashboard({ ticker = 'SPY', timeframe = '1d', p
   const [generatedReportPath, setGeneratedReportPath] = useState('');
   const [mlEnabled, setMlEnabled] = useState(false);
 
-  // Load active tab data
-  useEffect(() => {
-    fetchTabData();
-  }, [activeTab, ticker, timeframe, period]); // eslint-disable-line
-
-  const fetchTabData = async () => {
+  const fetchTabData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -83,7 +75,13 @@ export default function QuantLabsDashboard({ ticker = 'SPY', timeframe = '1d', p
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab, ticker, timeframe, period]);
+
+  // Load active tab data
+  useEffect(() => {
+    const timeoutId = window.setTimeout(fetchTabData, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [fetchTabData]);
 
   const handleGenerateReport = async (runId) => {
     setReportGenerating(true);
