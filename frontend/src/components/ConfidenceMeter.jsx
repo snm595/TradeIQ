@@ -1,10 +1,17 @@
 import { Gauge, ShieldAlert, ShieldCheck, Shield } from 'lucide-react';
 import { clsx } from 'clsx';
 
+const getRiskIcon = (riskLevel) => {
+  if (riskLevel === 'low') return <ShieldCheck className="w-4 h-4 text-green-500" />;
+  if (riskLevel === 'moderate') return <Shield className="w-4 h-4 text-amber-500" />;
+  if (riskLevel === 'high') return <ShieldAlert className="w-4 h-4 text-red-500" />;
+  return <Shield className="w-4 h-4 text-slate-500" />;
+};
+
 export default function ConfidenceMeter({ signal }) {
   if (!signal) return null;
 
-  const { confidence_pct, grade, risk_level, decision } = signal;
+  const { confidence_pct, grade, risk_level } = signal;
   
   // Calculate stroke dasharray for the SVG arc
   const radius = 60;
@@ -24,13 +31,6 @@ export default function ConfidenceMeter({ signal }) {
     colorClass = 'text-red-500';
     strokeClass = 'stroke-red-500';
   }
-
-  const RiskIcon = () => {
-    if (risk_level === 'low') return <ShieldCheck className="w-4 h-4 text-green-500" />;
-    if (risk_level === 'moderate') return <Shield className="w-4 h-4 text-amber-500" />;
-    if (risk_level === 'high') return <ShieldAlert className="w-4 h-4 text-red-500" />;
-    return <Shield className="w-4 h-4 text-slate-500" />;
-  };
 
   return (
     <section className="panel p-5 flex flex-col items-center relative overflow-hidden">
@@ -84,7 +84,7 @@ export default function ConfidenceMeter({ signal }) {
         <div className="flex flex-col items-end">
           <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Risk</span>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <RiskIcon />
+            {getRiskIcon(risk_level)}
             <span className="font-medium capitalize">{risk_level}</span>
           </div>
         </div>

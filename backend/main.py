@@ -106,7 +106,13 @@ def analyze(
         chart_df['time'] = chart_df['time'].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
 
         # Select columns to send to frontend to reduce payload size
-        cols_to_keep = ['time', 'open', 'high', 'low', 'close', 'volume', 'vwap', 'ema_200', 'signal', 'confidence_pct', 'decision']
+        cols_to_keep = [
+            'time', 'open', 'high', 'low', 'close', 'volume', 'vwap', 'ema_200',
+            'signal', 'confidence_pct', 'decision', 'regime', 'is_choppy',
+            'chop_score', 'continuation_quality_score', 'breakout_follow_through',
+            'directional_efficiency', 'trend_stability', 'failed_breakout_count'
+        ]
+        cols_to_keep = [col for col in cols_to_keep if col in chart_df.columns]
         chart_data = chart_df[cols_to_keep].to_dict(orient="records")
 
 

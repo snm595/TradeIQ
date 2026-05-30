@@ -108,6 +108,104 @@
     gap: 1rem;
   }
 
+  .ops-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
+    gap: 1rem;
+  }
+
+  .ops-state-chip {
+    min-height: 2.35rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border-radius: 0.55rem;
+    padding: 0.42rem 0.7rem;
+    font-size: 0.78rem;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+
+  .ops-state-buy {
+    color: #c5ffe6;
+    border: 1px solid rgba(64, 240, 155, 0.42);
+    background: rgba(20, 184, 122, 0.14);
+    box-shadow: 0 0 24px rgba(20, 184, 122, 0.16);
+  }
+
+  .ops-state-sell {
+    color: #ffd2d8;
+    border: 1px solid rgba(255, 127, 139, 0.42);
+    background: rgba(244, 63, 94, 0.14);
+    box-shadow: 0 0 24px rgba(244, 63, 94, 0.13);
+  }
+
+  .ops-state-wait {
+    color: #fff0bd;
+    border: 1px solid rgba(250, 204, 21, 0.36);
+    background: rgba(250, 204, 21, 0.12);
+  }
+
+  .ops-state-flat {
+    color: #cdd8e8;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background: rgba(100, 116, 139, 0.14);
+  }
+
+  .signal-tape-list {
+    max-height: 460px;
+    overflow-y: auto;
+    display: grid;
+    gap: 0.65rem;
+    padding-right: 0.2rem;
+  }
+
+  .signal-tape-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border: 1px solid rgba(100, 116, 139, 0.28);
+    background: rgba(3, 9, 20, 0.42);
+    border-radius: 0.6rem;
+    padding: 0.75rem;
+    min-width: 0;
+  }
+
+  .signal-tape-icon {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.55rem;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(125, 176, 255, 0.22);
+    background: rgba(56, 130, 246, 0.12);
+    flex: 0 0 auto;
+  }
+
+  .signal-tape-icon-active {
+    border-color: rgba(52, 211, 153, 0.36);
+    background: rgba(20, 184, 122, 0.13);
+  }
+
+  .signal-tape-icon-reject {
+    border-color: rgba(251, 191, 36, 0.35);
+    background: rgba(251, 191, 36, 0.1);
+  }
+
+  .signal-tape-empty {
+    min-height: 180px;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 0.6rem;
+    color: #94a3b8;
+    border: 1px dashed rgba(148, 163, 184, 0.28);
+    border-radius: 0.75rem;
+    background: rgba(3, 9, 20, 0.28);
+    text-align: center;
+  }
+
   .panel-header {
     display: flex;
     justify-content: space-between;
@@ -199,6 +297,10 @@
     .intel-grid {
       grid-template-columns: 1fr;
     }
+
+    .ops-grid {
+      grid-template-columns: 1fr;
+    }
   }
 
   @media (max-width: 900px) {
@@ -207,4 +309,45 @@
       padding: 0.75rem;
     }
   }
+}
+.ticker-search-wrapper {
+  position: relative;
+  z-index: 40;
+}
+
+.ticker-dropdown {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  left: 0;
+  width: 100%;
+  max-height: 320px;
+  overflow-y: auto;
+
+  z-index: 999;
+
+  border-radius: 1rem;
+  border: 1px solid rgba(122, 161, 214, 0.18);
+
+  background: linear-gradient(
+    145deg,
+    rgba(10, 18, 32, 0.96),
+    rgba(6, 12, 24, 0.96)
+  );
+
+  backdrop-filter: blur(18px);
+
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(170, 205, 255, 0.08);
+}
+.hero-grid,
+.ops-grid,
+.intel-grid {
+  position: relative;
+  z-index: 1;
+}
+
+header.panel {
+  position: relative;
+  z-index: 100;
 }
